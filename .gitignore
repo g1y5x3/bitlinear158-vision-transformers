@@ -1,0 +1,4 @@
+runs
+.ipynb_checkpoints/
+__pycache__/
+*.swp
