@@ -51,11 +51,8 @@ class BitLinear(nn.Linear):
     x_quant, x_scale = activation_quant(x_norm)
     w_quant, w_scale = weight_quant(w)
 
-    output1 = F.linear(x_norm + (x_quant/x_scale - x_norm).detach(), w + (w_quant/w_scale - w).detach())
-    output2 = F.linear(x_norm + (x_quant - x_norm).detach(), w + (w_quant - w).detach())/(x_scale * w_scale)
-    print(output1[0,0,:10])
-    print(output2[0,0,:10])
-    return output1
+    output = F.linear(x_norm + (x_quant/x_scale - x_norm).detach(), w + (w_quant/w_scale - w).detach())
+    return output
 
 if __name__ == "__main__":
   # a minimal example to demonstrate the impace the pre-rescale and post-rescale without having to worry about autograd
