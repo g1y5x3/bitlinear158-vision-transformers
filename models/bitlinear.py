@@ -55,7 +55,7 @@ class BitLinear(nn.Linear):
     return output
 
 if __name__ == "__main__":
-  # a minimal example to demonstrate the impace the pre-rescale and post-rescale without having to worry about autograd
+  # a minimal example to demonstrate the difference between pre-rescale and post-rescale without having to worry about gradients
   bsz, seq_len, d = 2, 8, 16
 
   def pre_scale_vs_post_scale(dtype, device):

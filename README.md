@@ -20,9 +20,9 @@ $\tilde{x} = {Clip}(\dfrac{xQ_b}{\gamma}, -Q_b+\epsilon, Q_b-\epsilon)$, where $
 First of all, both `x` and `w` are still in `float16` during training. However, they do get __quantized__ to maintain the property of 8 bits for `x` 
 and ternary for `w`. In the code provided by 
 [FAQ](https://github.com/microsoft/unilm/blob/master/bitnet/The-Era-of-1-bit-LLMs__Training_Tips_Code_FAQ.pdf),
-both `x_quant` and `w_quant` are also __rescaled__ before `F.linear` which is
+both `x_quant` and `w_quant` are also __rescaled__ before `F.linear` which becomes
 
-$f(x)=(\dfrac{\tilde{W}}{\beta})(\dfrac{\tilde{x}Q_b}{\gamma})$
+$f(x)=(\beta\tilde{W})(\dfrac{\gamma\tilde{x}}{Q_b})$
 
 ```python
 x_scale = 127.0 / x.abs().max(dim=-1, keepdim=True).values.clamp(min=1e-5)
@@ -35,13 +35,14 @@ w_quant = w + (quant - w).detach()
 
 output  = F.linear(x_quant, w_quant)
 ```
-The `.detach()` is a trick to make `F.linear` think it is still calculating $f(x)=Wx$ instead of $\tilde{W}\tilde{x}$, therefore resulting the
-gradient $\nabla f = \dfrac{\partial f}{\partial W} = x$ intead of $\tilde{x}$
+Using `x + (quant - x).detach()` and `w + (quant - w).detach()` is a trick to employ straight-through estimator that makes `F.linear` think it is
+still calculating $f(x)=Wx$ instead of $\tilde{W}\tilde{x}$, which can bypass the non-differentiable functions ($RoundClip$ and $Clip$), therefore
+resulting the gradient $\nabla f = \dfrac{\partial f}{\partial W} = x$.
 
-But this calculation is also equivalent to 
-$f(x)=(\dfrac{\tilde{W}}{\beta})(\dfrac{\tilde{x}Q_b}{\gamma})=\tilde{W}\tilde{x}(\dfrac{Q_b}{\beta\gamma})$
+But mathmatically this calculation is also equivalent to
+$f(x)=(\beta\tilde{W})(\dfrac{\gamma\tilde{x}}{Q_b})=\tilde{W}\tilde{x}(\dfrac{\beta\gamma}{Q_b})$
 
-Thus techniquically this can also be
+The implementation can then become
 ```python
 x_scale = 127.0 / x.abs().max(dim=-1, keepdim=True).values.clamp(min=1e-5)
 quant   = (x * x_scale).round().clamp(-128, 127)
@@ -53,11 +54,11 @@ w_quant = w + (quant - w).detach()
 
 output  = F.linear(x_quant, w_quant) / (x_scale * w_scale)
 ```
-where `x_quant` and `w_quant` are $[-127, 128]$ (8 bits) and $\{-1, 0, 1\}$ (tenary) which means this matmul in theory can be down in much lower 
+where `x_quant` and `w_quant` are $[-127, 128]$ (8 bits) and $\{-1, 0, 1\}$ (tenary) which means in theory this matmul can be done in much lower
 precision ([INT8 GEMM](https://github.com/jundaf2/CUDA-INT8-GEMM)?). 
 
 However, due to floating-point arithmetic operations are not always associative or commutative, the resulting losses are slightly different (a few 
-more tests in [models/bitlinear.py](models/bitlinear.py#L60)).
+more tests in [models/bitlinear.py](models/bitlinear.py#L59-L83)).
 
 ![when-to-rescale](figures/rescale_pre-linear_vs_rescale_post-linear.png)
 
