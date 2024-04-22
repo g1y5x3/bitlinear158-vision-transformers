@@ -43,11 +43,12 @@ def weight_quant(w: Tensor):
 class BitLinear(nn.Linear):
   def __init__(self, *args, **kwargs):
     super(BitLinear, self).__init__(*args, **kwargs)
-    self.rms_norm = RMSNorm(self.in_features)
+    # self.norm = RMSNorm(self.in_features)
+    self.norm = nn.LayerNorm(self.in_features)
 
   def forward(self, x: Tensor) -> Tensor:
     w = self.weight
-    x_norm = self.rms_norm(x)
+    x_norm = self.norm(x)
     x_quant, x_scale = activation_quant(x_norm)
     w_quant, w_scale = weight_quant(w)
 

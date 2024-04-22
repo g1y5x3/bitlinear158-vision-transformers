@@ -60,9 +60,15 @@ much lower precision ([INT8 GEMM](https://github.com/jundaf2/CUDA-INT8-GEMM)?).
 However, due to floating-point arithmetic operations are not always associative or commutative, the resulting losses are slightly different (a few 
 more tests in [models/bitlinear.py](models/bitlinear.py#L59-L83)).
 
-![when-to-rescale](figures/simple_experiments.png)
+![rescale](figures/simple_experiments.png)
+
+*Loss curves when running BitLinear on different conditions.*
 
 ## Reults
+### DETR
+![nn.Linear vs BitLinear](figures/nnLinear_vs_BitLinear.png)
+
+*Comparison between using nn.Linear and BitLinear in the transformer of DETR.*
 
 ## TODO
 - [x] rewrite the model to make the coder simplier, more readable, and easy to study.
