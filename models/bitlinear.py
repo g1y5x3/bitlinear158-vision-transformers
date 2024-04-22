@@ -52,6 +52,7 @@ class BitLinear(nn.Linear):
     w_quant, w_scale = weight_quant(w)
 
     output = F.linear(x_norm + (x_quant/x_scale - x_norm).detach(), w + (w_quant/w_scale - w).detach())
+    # output = F.linear(x_norm + (x_quant - x_norm).detach(), w + (w_quant - w).detach()) / (x_scale * w_scale)
     return output
 
 if __name__ == "__main__":

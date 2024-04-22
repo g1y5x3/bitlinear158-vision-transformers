@@ -54,13 +54,13 @@ w_quant = w + (quant - w).detach()
 
 output  = F.linear(x_quant, w_quant) / (x_scale * w_scale)
 ```
-where `x_quant` and `w_quant` are $[-127, 128]$ (8 bits) and $\{-1, 0, 1\}$ (tenary) which means in theory this matmul can be done in much lower
-precision ([INT8 GEMM](https://github.com/jundaf2/CUDA-INT8-GEMM)?). 
+where `x_quant` and `w_quant` are $[-127, 128]$ (8 bits) and $\{-1, 0, 1\}$ (tenary) which means in theory this matmul can be done very easily in 
+much lower precision ([INT8 GEMM](https://github.com/jundaf2/CUDA-INT8-GEMM)?). 
 
 However, due to floating-point arithmetic operations are not always associative or commutative, the resulting losses are slightly different (a few 
 more tests in [models/bitlinear.py](models/bitlinear.py#L59-L83)).
 
-![when-to-rescale](figures/rescale_pre-linear_vs_rescale_post-linear.png)
+![when-to-rescale](figures/simple_experiments.png)
 
 ## Reults
 

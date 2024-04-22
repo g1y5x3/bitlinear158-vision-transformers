@@ -172,6 +172,8 @@ class TransformerEncoderLayerBitLinear(nn.Module):
     self.dropout1 = nn.Dropout(dropout)
     self.dropout2 = nn.Dropout(dropout)
 
+    self.activation = nn.ReLU()
+
   def forward(self, src: Tensor, src_key_padding_mask: Tensor, src_pos: Tensor):
     # self-attention
     q = k = src + src_pos
@@ -179,7 +181,7 @@ class TransformerEncoderLayerBitLinear(nn.Module):
     src = src + self.dropout1(self_attn)
 
     # feedforward
-    ff = self.linear2(self.dropout(self.linear1(src)))
+    ff = self.linear2(self.dropout(self.activation(self.linear1(src))))
     src = src + self.dropout2(ff)
 
     return src
@@ -198,6 +200,8 @@ class TransformerDecoderLayerBitLinear(nn.Module):
     self.dropout2 = nn.Dropout(dropout)
     self.dropout3 = nn.Dropout(dropout)
 
+    self.activation = nn.ReLU()
+
   def forward(self, memory: Tensor, memory_key_padding_mask: Tensor, memory_pos: Tensor,
                     tgt: Tensor, query_pos: Tensor):
     # self-attention
@@ -212,7 +216,7 @@ class TransformerDecoderLayerBitLinear(nn.Module):
     tgt = tgt + self.dropout2(cross_attn)
 
     # feedforward
-    ff = self.linear2(self.dropout(self.linear1(tgt)))
+    ff = self.linear2(self.dropout(self.activation(self.linear1(tgt))))
     tgt = tgt + self.dropout3(ff)
 
     return tgt
