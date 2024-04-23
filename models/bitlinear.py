@@ -53,6 +53,7 @@ class BitLinear(nn.Linear):
     w_quant, w_scale = weight_quant(w)
 
     output = F.linear(x_norm + (x_quant/x_scale - x_norm).detach(), w + (w_quant/w_scale - w).detach())
+    # TODO: use INT8 to perform the F.linear
     # output = F.linear(x_norm + (x_quant - x_norm).detach(), w + (w_quant - w).detach()) / (x_scale * w_scale)
     return output
 
@@ -61,6 +62,8 @@ if __name__ == "__main__":
   bsz, seq_len, d = 2, 8, 16
 
   def pre_scale_vs_post_scale(dtype, device):
+    print(f"precision: {dtype}, device: {device}")
+
     x = torch.randn((bsz, seq_len, d), dtype=dtype).to(device)
     w = torch.randn((d, d), dtype=dtype).to(device)
 
@@ -73,13 +76,9 @@ if __name__ == "__main__":
     output1 = F.linear(x_quant/x_scale, w_quant/w_scale)
     output2 = F.linear(x_quant, w_quant)/(x_scale*w_scale)
  
-    print(torch.allclose(output1, output2, rtol=1e-05, atol=1e-05, equal_nan=True))
+    print(f"rtol=1e-05, atol=1e-05 {torch.allclose(output1, output2, rtol=1e-05, atol=1e-05, equal_nan=True)}")
+    print(f"rtol=1e-03, atol=1e-03 {torch.allclose(output1, output2, rtol=1e-03, atol=1e-03, equal_nan=True)}")
+    print(f"rtol=1e-03, atol=1e-02 {torch.allclose(output1, output2, rtol=1e-03, atol=1e-02, equal_nan=True)}")
 
-  print(torch.float32, "cpu")
-  pre_scale_vs_post_scale(torch.float32, "cpu")
-  print(torch.float32, "cuda")
-  pre_scale_vs_post_scale(torch.float32, "cuda")
-  print(torch.float16, "cpu")
   pre_scale_vs_post_scale(torch.float16, "cpu")
-  print(torch.float16, "cuda")
   pre_scale_vs_post_scale(torch.float16, "cuda")
