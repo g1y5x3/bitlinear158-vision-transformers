@@ -1,22 +1,21 @@
-import argparse
 import datetime
 import json
-import random
 import time
-from pathlib import Path
-
-import numpy as np
-import torch
 from torch.utils.data import DataLoader, DistributedSampler
-
 import datasets
 import util.misc as utils
 from datasets import build_dataset, get_coco_api_from_dataset
 from engine import evaluate, train_one_epoch
 
+import torch, random, argparse
+import numpy as np
+from pathlib import Path
+
 from models.backbone import ResNetBackbone
 from models.transformer import Transformer, TransformerBitLinear
-from models.detr import DETR
+from models.detr import DETR, SetCriterion
+from models.matcher import HungarianMatcher
+
 
 def get_args_parser():
 	parser = argparse.ArgumentParser('Set transformer detector', add_help=False)
@@ -47,11 +46,11 @@ def get_args_parser():
 	parser.add_argument('--num_queries', default=100, type=int,
 											help="Number of query slots")
 	# Matcher
-	parser.add_argument('--set_cost_class', default=1, type=float,
+	parser.add_argument('--cost_class', default=1, type=float,
 											help="Class coefficient in the matching cost")
-	parser.add_argument('--set_cost_bbox', default=5, type=float,
+	parser.add_argument('--cost_bbox', default=5, type=float,
 											help="L1 box coefficient in the matching cost")
-	parser.add_argument('--set_cost_giou', default=2, type=float,
+	parser.add_argument('--cost_giou', default=2, type=float,
 											help="giou box coefficient in the matching cost")
 	# Loss coefficients
 	parser.add_argument('--dice_loss_coef', default=1, type=float)
@@ -94,6 +93,9 @@ def main(args):
 	backbone = ResNetBackbone()		# currently not using the args
 	transformer = Transformer(args.hidden_dim, args.nheads, args.enc_layers, args.dec_layers, args.dim_feedforward, args.dropout)
 	model = DETR(backbone, transformer, num_classes=91, num_queries=args.num_queries)
+
+	matcher = HungarianMatcher(args.cost_class, args.cost_bbox, args.cost_giou)
+	criterion = SetCriterion(91, matcher, args.eos_coef, (args.dice_loss_coef, args.bbox_loss_coef, args.giou_loss_coef))
 
 	#model, criterion, postprocessors = build_model(args)
 	#model.to(device)
