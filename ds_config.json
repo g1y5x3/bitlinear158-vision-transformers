@@ -1,0 +1,13 @@
+{
+  "train_batch_size": 16,
+  "optimizer": {
+    "type": "Adam",
+    "params": {
+      "lr": 1e-5
+    }
+  },
+  "fp16": {
+    "enabled": true
+  },
+  "zero_optimization": true
+}

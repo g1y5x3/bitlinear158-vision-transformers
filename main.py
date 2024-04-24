@@ -1,13 +1,14 @@
-import datetime
-import json
-import time
-from torch.utils.data import DataLoader, DistributedSampler
-import datasets
+#import datetime
+#import json
+#import time
+#from torch.utils.data import DataLoader, DistributedSampler
+#import datasets
+#
+#import torch, random, argparse
+#import numpy as np
+#from pathlib import Path
 
-import torch, random, argparse
-import numpy as np
-from pathlib import Path
-
+import deepspeed
 import util.misc as utils
 from models.backbone import ResNetBackbone
 from models.transformer import Transformer, TransformerBitLinear
@@ -81,7 +82,24 @@ def get_args_parser():
 
 
 def main(args):
+	ds_config = {
+  	"train_batch_size": 16,
+  	"optimizer": {
+  	  "type": "Adam",
+  	  "params": {
+  	    "lr": 1e-5
+  	  }
+  	},
+  	"fp16": {
+  	  "enabled": true
+  	},
+  	"zero_optimization": true
+	}
+
 	print("git:\n  {}\n".format(utils.get_sha()))
+
+	deepspeed.init_distributed()
+
 	device = torch.device(args.device)
 
   # fix the seed for reproducibility (and your sanity)
@@ -103,28 +121,33 @@ def main(args):
 	n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
 	print('number of params:', n_parameters)
 
-	# optimizer
-	param_dicts = [
-	  {"params": [p for n, p in model.named_parameters() if "backbone" not in n and p.requires_grad]},
-	  {"params": [p for n, p in model.named_parameters() if "backbone" in n and p.requires_grad], "lr": args.lr_backbone},
-	]
+	# # optimizer
+	# param_dicts = [
+	#   {"params": [p for n, p in model.named_parameters() if "backbone" not in n and p.requires_grad]},
+	#   {"params": [p for n, p in model.named_parameters() if "backbone" in n and p.requires_grad], "lr": args.lr_backbone},
+	# ]
 
-	optimizer = torch.optim.AdamW(param_dicts, lr=args.lr, weight_decay=args.weight_decay)
-	scaler = torch.cuda.amp.GradScaler()
-	lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.lr_drop)
+	#optimizer = torch.optim.AdamW(param_dicts, lr=args.lr, weight_decay=args.weight_decay)
+	#scaler = torch.cuda.amp.GradScaler()
+	#lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.lr_drop)
 
 	# create dataset
 	dataset_train = build_dataset(image_set='train', args=args)
-	dataset_val   = build_dataset(image_set='val', args=args)
-	sampler_train = torch.utils.data.RandomSampler(dataset_train)
-	sampler_val   = torch.utils.data.SequentialSampler(dataset_val)
+	# dataset_val   = build_dataset(image_set='val', args=args)
+	# sampler_train = torch.utils.data.RandomSampler(dataset_train)
+	# sampler_val   = torch.utils.data.SequentialSampler(dataset_val)
+	# batch_sampler_train = torch.utils.data.BatchSampler(sampler_train, args.batch_size, drop_last=True)
 
-	batch_sampler_train = torch.utils.data.BatchSampler(sampler_train, args.batch_size, drop_last=True)
-
-	data_loader_train = DataLoader(dataset_train, batch_sampler=batch_sampler_train, 
+	# data_loader_train = DataLoader(dataset_train, batch_sampler=batch_sampler_train, 
 																 collate_fn=utils.collate_fn, num_workers=args.num_workers)
-	data_loader_val   = DataLoader(dataset_val, args.batch_size, sampler=sampler_val, drop_last=False,
+	# data_loader_val   = DataLoader(dataset_val, args.batch_size, sampler=sampler_val, drop_last=False,
 															   collate_fn=utils.collate_fn, num_workers=args.num_workers)
+
+	model, optimizer, data_loader_train, _ = deepspeed.initialize(model=model,
+																																model_parameters=model.parameters(),
+																																training_data=dataset_train,
+																																collate_fn=utils.collate_fn,
+																																config=ds_config)
 
 	output_dir = Path(args.output_dir)
 	print("Start training")
