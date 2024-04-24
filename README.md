@@ -117,7 +117,5 @@ rtol=1e-03, atol=1e-02 True
     - [x] training in float16 using `amp`
     - [ ] deepspeed integration for multigpu training
 - [ ] perform a full COCO training comparison run with `nn.Linear` vs `BitLinear`
-- [ ] Build custom cuda kernel for `BitLinear`. According to the 
-      [FAQ](https://github.com/microsoft/unilm/blob/master/bitnet/The-Era-of-1-bit-LLMs__Training_Tips_Code_FAQ.pdf),
-      with FP8 GEMM kernels, we can use FP8 activations for training and quantize to INT8 for inference.
+- [ ] Use custom kernels from [BitBLAS](https://github.com/microsoft/BitBLAS/tree/main) for `F.linear`.
 - [ ] Try `BitLinear` on DINO, LlaVa.

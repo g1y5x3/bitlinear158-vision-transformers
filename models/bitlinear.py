@@ -39,8 +39,7 @@ class BitLinear(nn.Linear):
 
     # TODO: create an custom kernel to use INT8 GEMM
     output = F.linear(x_norm + (x_quant - x_norm).detach(), w + (w_quant - w).detach())
-    # avoid inf
-    # https://github.com/microsoft/BitBLAS/blob/6033edc307ccc13c733e24fc4f5f263a9d5d6224/integration/BitNet/utils_quant.py#L133
+    # avoid inf https://github.com/microsoft/BitBLAS/blob/6033edc307ccc13c733e24fc4f5f263a9d5d6224/integration/BitNet/utils_quant.py#L133
     output = output / x_scale
     output = output / w_scale
     return output
