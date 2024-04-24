@@ -16,35 +16,20 @@ import torch.nn.functional as F
 from torch import Tensor
 
 
-"""https://arxiv.org/abs/1910.07467"""
-class RMSNorm(nn.Module):
-  def __init__(self, dim: int, eps: float = 1e-6):
-    super().__init__()
-    self.eps = eps
-    self.scale = nn.Parameter(torch.ones(dim))
-
-  def forward(self, x: Tensor) -> Tensor:
-    x_fp32 = x.float()
-    x_normed = x_fp32 * torch.rsqrt(x_fp32.pow(2).mean(-1, keepdim=True) + self.eps).type_as(x)
-    return x_normed * self.scale
-
-@torch.jit.script  # jit speedup https://colab.research.google.com/drive/1B_-PfHKzSmuwF3TETx_ZMlFSE5PNcr1k?usp=sharing
 def activation_quant(x: Tensor):
   scale = 127.0 / x.abs().max(dim=-1, keepdim=True).values.clamp(min=1e-5)
   quant = (x * scale).round().clamp(-128, 127)
   return quant, scale
 
-@torch.jit.script
 def weight_quant(w: Tensor):
   scale = 1.0 / w.abs().mean().clamp(min=1e-5)
   quant = (w * scale).round().clamp(-1, 1)
   return quant, scale
 
 class BitLinear(nn.Linear):
-  def __init__(self, *args, **kwargs):
-    super(BitLinear, self).__init__(*args, **kwargs)
-    # self.norm = RMSNorm(self.in_features)
-    self.norm = nn.LayerNorm(self.in_features)
+  def __init__(self, in_features:int, out_features: int, bias: bool=True, norm: nn.Module=nn.LayerNorm):
+    super(BitLinear, self).__init__(in_features, out_features, bias)
+    self.norm = norm(self.in_features)
 
   def forward(self, x: Tensor) -> Tensor:
     w = self.weight
@@ -52,9 +37,12 @@ class BitLinear(nn.Linear):
     x_quant, x_scale = activation_quant(x_norm)
     w_quant, w_scale = weight_quant(w)
 
-    output = F.linear(x_norm + (x_quant/x_scale - x_norm).detach(), w + (w_quant/w_scale - w).detach())
-    # TODO: use INT8 to perform the F.linear
-    # output = F.linear(x_norm + (x_quant - x_norm).detach(), w + (w_quant - w).detach()) / (x_scale * w_scale)
+    # TODO: create an custom kernel to use INT8 GEMM
+    output = F.linear(x_norm + (x_quant - x_norm).detach(), w + (w_quant - w).detach())
+    # avoid inf
+    # https://github.com/microsoft/BitBLAS/blob/6033edc307ccc13c733e24fc4f5f263a9d5d6224/integration/BitNet/utils_quant.py#L133
+    output = output / x_scale
+    output = output / w_scale
     return output
 
 if __name__ == "__main__":

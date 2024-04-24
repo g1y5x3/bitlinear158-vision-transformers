@@ -5,6 +5,19 @@ from torch import nn, Tensor
 
 from models.bitlinear import BitLinear
 
+
+"""https://arxiv.org/abs/1910.07467"""
+class RMSNorm(nn.Module):
+  def __init__(self, dim: int, eps: float = 1e-6):
+    super().__init__()
+    self.eps = eps
+    self.scale = nn.Parameter(torch.ones(dim))
+
+  def forward(self, x: Tensor) -> Tensor:
+    x_fp32 = x.float()
+    x_normed = x_fp32 * torch.rsqrt(x_fp32.pow(2).mean(-1, keepdim=True) + self.eps).type_as(x)
+    return x_normed * self.scale
+
 class MultiheadAttention(nn.Module):
   def __init__(self, embed_dim: int, num_heads: int, linear_layer: nn.Module=nn.Linear, dropout: float=0.0, bias: bool=True):
     super().__init__()

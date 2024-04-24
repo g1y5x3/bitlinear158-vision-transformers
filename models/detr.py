@@ -55,13 +55,13 @@ class DETR(nn.Module):
 
 class SetCriterion(nn.Module):
   def __init__(self, num_classes: int, matcher: nn.Module, eos_coef: float=0.1, weight: Tuple[float, float, float]=(1.0, 1.0, 1.0)) -> None:
-      super().__init__()
-      self.num_classes = num_classes
-      self.matcher = matcher
-      self.weight = weight
-      empty_weight = torch.ones(self.num_classes + 1)
-      empty_weight[-1] = eos_coef
-      self.register_buffer('empty_weight', empty_weight)
+    super().__init__()
+    self.num_classes = num_classes
+    self.matcher = matcher
+    self.weight = weight
+    empty_weight = torch.ones(self.num_classes + 1)
+    empty_weight[-1] = eos_coef
+    self.register_buffer('empty_weight', empty_weight)
 
   def forward(self, outputs: Dict[str, Tensor], targets: Dict[str, Tensor]):
     # match predictions with ground truth and produce src and target tensors for computing losses
