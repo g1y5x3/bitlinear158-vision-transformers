@@ -89,11 +89,9 @@ def get_args_parser():
 
 def main(args):
 	rank = int(os.getenv("LOCAL_RANK", "0"))
-	# world_size = int(os.getenv("WORLD_SIZE", "1"))
-	device = torch.device("cuda", rank)
 
 	ds_config = {
-  	"train_batch_size": 2,
+  	"train_batch_size": args.batch_size,
   	"optimizer": {
   	  "type": "Adam",
   	  "params": {
@@ -124,48 +122,51 @@ def main(args):
 	matcher = HungarianMatcher(args.cost_class, args.cost_bbox, args.cost_giou)
 	criterion = SetCriterion(91, matcher, args.eos_coef, (args.dice_loss_coef, args.bbox_loss_coef, args.giou_loss_coef))
 
+	# deepseed initialization
 	model_engine, optimizer, _, _ = deepspeed.initialize(model=model, model_parameters=model.parameters(), config=ds_config)
-	print(f"Rank {rank} Device {device.type} - ZeRO Stage: {model_engine.zero_optimization_stage()}")
+	device = torch.device("cuda", rank)
+	model.to(device)
+	criterion.to(device)
+	print(f"Rank {rank} Device {device} - ZeRO Stage: {model_engine.zero_optimization_stage()}")
 
-	# # create dataset
-	# dataset_train = build_dataset(image_set='train', args=args)
+	# create dataset
+	dataset_train = build_dataset(image_set='train', args=args)
 
-	# # dataset_val   = build_dataset(image_set='val', args=args)
-	# sampler_train = torch.utils.data.RandomSampler(dataset_train)
-	# # sampler_val   = torch.utils.data.SequentialSampler(dataset_val)
-	# batch_sampler_train = torch.utils.data.BatchSampler(sampler_train, args.batch_size, drop_last=True)
+	# dataset_val   = build_dataset(image_set='val', args=args)
+	# sampler_val   = torch.utils.data.SequentialSampler(dataset_val)
+	# data_loader_val   = DataLoader(dataset_val, args.batch_size, sampler=sampler_val, drop_last=False, collate_fn=utils.collate_fn, num_workers=args.num_workers)
+	sampler_train = torch.utils.data.RandomSampler(dataset_train)
+	batch_sampler_train = torch.utils.data.BatchSampler(sampler_train, args.batch_size, drop_last=True)
+	data_loader_train = DataLoader(dataset_train, batch_sampler=batch_sampler_train, collate_fn=utils.collate_fn, num_workers=args.num_workers)
 
-	# data_loader_train = DataLoader(dataset_train, batch_sampler=batch_sampler_train, 
-	# 															 collate_fn=utils.collate_fn, num_workers=args.num_workers)
-	# # data_loader_val   = DataLoader(dataset_val, args.batch_size, sampler=sampler_val, drop_last=False,
-	# # 														   collate_fn=utils.collate_fn, num_workers=args.num_workers)
+	print("Start training")
+	start_time = time.time()
 
-	# print("Start training")
-	# start_time = time.time()
+	for epoch in range(args.start_epoch, args.epochs):
+		model.train()
+		criterion.train()
 
-	# for epoch in range(args.start_epoch, args.epochs):
-	# 	model.train()
-	# 	criterion.train()
+		for samples, masks, targets in data_loader_train:
+			optimizer.zero_grad()
 
-	# 	with tqdm(data_loader_train, unit="batch") as tepoch: 
-	# 		for samples, masks, targets in tepoch:
-	# 			samples = samples.to(device)
-	# 			masks = masks.to(device)
-	# 			targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+			samples = samples.to(device)
+			masks = masks.to(device)
+			targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
-	# 			optimizer.zero_grad()
+			with torch.autocast(device_type="cuda", dtype=torch.float16):
+				outputs_logits, outputs_boxes = model_engine(samples, masks)
+				loss = criterion(outputs_logits, outputs_boxes, targets)
 
-	# 			outputs_logits, outputs_boxes = model_engine(samples, masks)
-	# 			loss = criterion(outputs_logits, outputs_boxes, targets)
+			model_engine.backward(loss)
+			torch.nn.utils.clip_grad_norm_(model_engine.parameters(), 0.1)
+			model_engine.step()
 
-	# 			model_engine.backward(loss)
-	# 			model_engine.step()
+			# if rank == 0:	print(loss.item())
+			# tepoch.set_postfix(loss=loss.item())		
 
-	# 			# tepoch.set_postfix(loss=loss.item())		
-
-	# total_time = time.time() - start_time
-	# total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-	# print('Training time {}'.format(total_time_str))		
+	total_time = time.time() - start_time
+	total_time_str = str(datetime.timedelta(seconds=int(total_time)))
+	print('Training time {}'.format(total_time_str))		
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])

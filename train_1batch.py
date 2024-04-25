@@ -55,7 +55,7 @@ writer.add_graph(model, x)
 
 for epochs in tqdm(range(500), desc="Training Progress"):
   optimizer.zero_grad()
-  with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
+  with torch.autocast(device_type="cuda", dtype=torch.float16):
     outputs_logits, outputs_boxes = model(x, x_mask)
     loss = criterion(outputs_logits, outputs_boxes, y)
 
