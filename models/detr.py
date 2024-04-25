@@ -47,11 +47,13 @@ class DETR(nn.Module):
     # TODO: fix the inversion of mask inside positional encoder
     output_embedding = self.transformer(src, ~src_mask, src_embed, query_embed)
 
-    outputs_class = self.class_embed(output_embedding)
-    outputs_coord = self.bbox_embed(output_embedding).sigmoid()
-    outputs = {'pred_logits': outputs_class, 'pred_boxes': outputs_coord}
+    pred_logits = self.class_embed(output_embedding)
+    pred_boxes = self.bbox_embed(output_embedding).sigmoid()
+    
+    # TODO: Does the output really need to be dictionary?
+    # outputs = {'pred_logits': outputs_class, 'pred_boxes': outputs_coord}
 
-    return outputs
+    return pred_logits, pred_boxes
 
 class SetCriterion(nn.Module):
   def __init__(self, num_classes: int, matcher: nn.Module, eos_coef: float=0.1, weight: Tuple[float, float, float]=(1.0, 1.0, 1.0)) -> None:
@@ -63,10 +65,10 @@ class SetCriterion(nn.Module):
     empty_weight[-1] = eos_coef
     self.register_buffer('empty_weight', empty_weight)
 
-  def forward(self, outputs: Dict[str, Tensor], targets: Dict[str, Tensor]):
+  def forward(self, outputs_logits: Tensor, outputs_boxes: Tensor, targets: Dict[str, Tensor]):
     # match predictions with ground truth and produce src and target tensors for computing losses
     # slowest part of the entire algorithm due to extra trips to the cpu inside matcher and targets having dynamic length
-    indices = self.matcher(outputs, targets)
+    indices = self.matcher(outputs_logits, outputs_boxes, targets)
     batch_idx, query_idx, labels, target_boxes = [], [], [], []
     for i, ((src_idx, tgt_idx), target) in enumerate(zip(indices, targets)):
       batch_idx.append(torch.full_like(src_idx, i))
@@ -77,12 +79,12 @@ class SetCriterion(nn.Module):
     query_idx = torch.cat(query_idx, dim=0)
     labels = torch.cat(labels, dim=0)
 
-    src_logits = outputs["pred_logits"]
+    src_logits = outputs_logits
     target_classes = torch.full(src_logits.shape[:2], self.num_classes, dtype=torch.int64, device=src_logits.device)
     target_classes[batch_idx, query_idx] = labels
     loss_ce = F.cross_entropy(src_logits.transpose(1,2), target_classes, self.empty_weight, reduction="mean")
 
-    src_boxes = outputs["pred_boxes"][batch_idx, query_idx]
+    src_boxes = outputs_boxes[batch_idx, query_idx]
     target_boxes = torch.cat(target_boxes)
     loss_l1 = F.l1_loss(src_boxes, target_boxes, reduction="mean")
     loss_giou = giou_loss(box_convert(src_boxes,"cxcywh","xyxy"), box_convert(target_boxes,"cxcywh","xyxy"), reduction="mean")

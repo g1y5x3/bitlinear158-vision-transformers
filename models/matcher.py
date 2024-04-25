@@ -30,7 +30,7 @@ class HungarianMatcher(nn.Module):
     assert cost_class != 0 or cost_bbox != 0 or cost_giou != 0, "all costs cant be 0"
 
   @torch.no_grad()
-  def forward(self, outputs, targets):
+  def forward(self, outputs_logits, outputs_boxes, targets):
     """ Performs the matching
 
     Params:
@@ -50,11 +50,11 @@ class HungarianMatcher(nn.Module):
         For each batch element, it holds:
             len(index_i) = len(index_j) = min(num_queries, num_target_boxes)
     """
-    bs, num_queries = outputs["pred_logits"].shape[:2]
+    bs, num_queries = outputs_logits.shape[:2]
 
     # We flatten to compute the cost matrices in a batch
-    out_prob = outputs["pred_logits"].flatten(0, 1).softmax(-1)  # [batch_size * num_queries, num_classes]
-    out_bbox = outputs["pred_boxes"].flatten(0, 1)  # [batch_size * num_queries, 4]
+    out_prob = outputs_logits.flatten(0, 1).softmax(-1)  # [batch_size * num_queries, num_classes]
+    out_bbox = outputs_boxes.flatten(0, 1)  # [batch_size * num_queries, 4]
 
     # Also concat the target labels and boxes
     tgt_ids = torch.cat([v["labels"] for v in targets])

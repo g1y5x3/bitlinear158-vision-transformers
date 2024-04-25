@@ -72,15 +72,16 @@ class TransformerEncoderLayer(nn.Module):
 
   def forward(self, src: Tensor, src_key_padding_mask: Tensor, src_pos: Tensor):
     # self-attention
-    src = self.norm1(src)
-    q = k = self.norm1(src + src_pos) # positional embedding is added to each layer of the encoder
+    q = k = src + src_pos # positional embedding is added to each layer of the encoder
     self_attn = self.self_attn(q, k, src, key_padding_mask=src_key_padding_mask)
     src = src + self.dropout1(self_attn)
+    src = self.norm1(src)
 
     # feedforward
     src = self.norm2(src)
     ff = self.linear2(self.dropout(self.activation(self.linear1(src))))
     src = src + self.dropout2(ff)
+    src = self.norm2(src)
 
     return src
 
@@ -106,22 +107,22 @@ class TransformerDecoderLayer(nn.Module):
   def forward(self, memory: Tensor, memory_key_padding_mask: Tensor, memory_pos: Tensor,
                     tgt: Tensor, query_pos: Tensor):
     # self-attention
-    tgt = self.norm1(tgt)
-    q = k = self.norm1(tgt + query_pos) # positional embedding is also added to each layer of the decoder
+    q = k = tgt + query_pos # positional embedding is also added to each layer of the decoder
     self_attn = self.self_attn(q, k, tgt)
     tgt = tgt + self.dropout1(self_attn)
+    tgt = self.norm1(tgt)
 
     # cross-attention
-    tgt = self.norm2(tgt)
-    q = self.norm2(tgt + query_pos)
-    k = self.norm2(memory + memory_pos)
+    q = tgt + query_pos
+    k = memory + memory_pos
     cross_attn = self.cross_attn(q, k, memory, key_padding_mask=memory_key_padding_mask)
     tgt = tgt + self.dropout2(cross_attn)
+    tgt = self.norm2(tgt)
 
     # feedforward
-    tgt = self.norm3(tgt)
     ff = self.linear2(self.dropout(self.activation(self.linear1(tgt))))
     tgt = tgt + self.dropout3(ff)
+    tgt = self.norm3(tgt)
 
     return tgt
 

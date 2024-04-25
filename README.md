@@ -9,6 +9,8 @@ felt like I was editing _yaml_ files most of the time which was quite frustratin
 but the code also looks very similar to [original detr repo](https://github.com/facebookresearch/detr), which was a bit out dated, e.g, it didn't
 support mixed precision, it has low GPU utilization during training. Moreoever, it felt a bit too complex for an idea that is fairly straight forward.
 Therefore, I decided to rewrite everything with the goal to make it easy to read, study, build and hack around.
+__(still a work in progress to remove the complexity)__
+
 ## Notes on BitLinear
 ### Formulation
 $y = f(x) = \tilde{W} Quant(LN(x)) = \tilde{W}\tilde{x}$

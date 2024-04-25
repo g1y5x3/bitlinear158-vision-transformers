@@ -8,13 +8,13 @@
 #import numpy as np
 #from pathlib import Path
 
-import deepspeed
+import argparse, deepspeed
 import util.misc as utils
 from models.backbone import ResNetBackbone
 from models.transformer import Transformer, TransformerBitLinear
 from models.detr import DETR, SetCriterion
 from models.matcher import HungarianMatcher
-from datasets import build_dataset, get_coco_api_from_dataset
+from datasets import build_dataset
 from engine import train_one_epoch
 
 def get_args_parser():
