@@ -8,7 +8,11 @@
 #import numpy as np
 #from pathlib import Path
 
-import argparse, deepspeed
+import torch, deepspeed, time, datetime, random, argparse 
+import numpy as np
+from tqdm import tqdm
+from torch.utils.data import DataLoader
+
 import util.misc as utils
 from models.backbone import ResNetBackbone
 from models.transformer import Transformer, TransformerBitLinear
@@ -75,6 +79,8 @@ def get_args_parser():
 	# Distributed training parameters
 	parser.add_argument('--world_size', default=1, type=int,
 											help='number of distributed processes')
+	parser.add_argument('--local_rank', default=-1, type=int,
+										  help='parameters used by deepspeed')
   # Segmentation
 	parser.add_argument('--masks', action='store_true',
 											help="Train segmentation head if the flag is provided")
@@ -91,14 +97,14 @@ def main(args):
   	  }
   	},
   	"fp16": {
-  	  "enabled": true
+  	  "enabled": True
   	},
-  	"zero_optimization": true
+  	"zero_optimization": True
 	}
 
 	print("git:\n  {}\n".format(utils.get_sha()))
 
-	deepspeed.init_distributed()
+	# deepspeed.init_distributed()
 
 	device = torch.device(args.device)
 
@@ -112,51 +118,54 @@ def main(args):
 	backbone = ResNetBackbone()		# currently not using the args
 	transformer = TransformerBitLinear(args.hidden_dim, args.nheads, args.enc_layers, args.dec_layers, args.dim_feedforward, args.dropout)
 	model = DETR(backbone=backbone, transformer=transformer, num_classes=91, num_queries=args.num_queries)
+	n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
+	print('number of params:', n_parameters)
+
 	matcher = HungarianMatcher(args.cost_class, args.cost_bbox, args.cost_giou)
 	criterion = SetCriterion(91, matcher, args.eos_coef, (args.dice_loss_coef, args.bbox_loss_coef, args.giou_loss_coef))
 
 	model.to(device)
 	criterion.to(device)
 
-	n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
-	print('number of params:', n_parameters)
-
-	# # optimizer
-	# param_dicts = [
-	#   {"params": [p for n, p in model.named_parameters() if "backbone" not in n and p.requires_grad]},
-	#   {"params": [p for n, p in model.named_parameters() if "backbone" in n and p.requires_grad], "lr": args.lr_backbone},
-	# ]
-
-	#optimizer = torch.optim.AdamW(param_dicts, lr=args.lr, weight_decay=args.weight_decay)
-	#scaler = torch.cuda.amp.GradScaler()
-	#lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.lr_drop)
-
 	# create dataset
 	dataset_train = build_dataset(image_set='train', args=args)
-	# dataset_val   = build_dataset(image_set='val', args=args)
-	# sampler_train = torch.utils.data.RandomSampler(dataset_train)
-	# sampler_val   = torch.utils.data.SequentialSampler(dataset_val)
-	# batch_sampler_train = torch.utils.data.BatchSampler(sampler_train, args.batch_size, drop_last=True)
 
-	# data_loader_train = DataLoader(dataset_train, batch_sampler=batch_sampler_train, 
+	# dataset_val   = build_dataset(image_set='val', args=args)
+	sampler_train = torch.utils.data.RandomSampler(dataset_train)
+	# sampler_val   = torch.utils.data.SequentialSampler(dataset_val)
+	batch_sampler_train = torch.utils.data.BatchSampler(sampler_train, args.batch_size, drop_last=True)
+
+	data_loader_train = DataLoader(dataset_train, batch_sampler=batch_sampler_train, 
 																 collate_fn=utils.collate_fn, num_workers=args.num_workers)
 	# data_loader_val   = DataLoader(dataset_val, args.batch_size, sampler=sampler_val, drop_last=False,
-															   collate_fn=utils.collate_fn, num_workers=args.num_workers)
+	# 														   collate_fn=utils.collate_fn, num_workers=args.num_workers)
 
-	model, optimizer, data_loader_train, _ = deepspeed.initialize(model=model,
-																																model_parameters=model.parameters(),
-																																training_data=dataset_train,
-																																collate_fn=utils.collate_fn,
-																																config=ds_config)
+	model_engine, optimizer, _, _ = deepspeed.initialize(model=model, model_parameters=model.parameters(),
+																																			 training_data=dataset_train, collate_fn=utils.collate_fn,
+																																			 config=ds_config)
 
-	output_dir = Path(args.output_dir)
 	print("Start training")
 	start_time = time.time()
 
 	for epoch in range(args.start_epoch, args.epochs):
-	  # if args.distributed: sampler_train.set_epoch(epoch)
-	  train_stats = train_one_epoch(model, criterion, data_loader_train, optimizer, scaler, device, epoch, args.clip_max_norm)
-	  lr_scheduler.step()
+		model.train()
+		criterion.train()
+
+		with tqdm(data_loader_train, unit="batch") as tepoch: 
+			for samples, masks, targets in tepoch:
+				samples = samples.to(device)
+				masks = masks.to(device)
+				targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+
+				optimizer.zero_grad()
+
+				outputs_logits, outputs_boxes = model_engine(samples, masks)
+				loss = criterion(outputs_logits, outputs_boxes, targets)
+
+				model_engine.backward(loss)
+				model_engine.step()
+
+				# tepoch.set_postfix(loss=loss.item())		
 
 	total_time = time.time() - start_time
 	total_time_str = str(datetime.timedelta(seconds=int(total_time)))

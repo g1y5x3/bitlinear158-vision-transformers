@@ -32,13 +32,13 @@ batch_fetcher = iter(data_loader_train)
 
 x, x_mask, y = next(batch_fetcher)
 
-writer = SummaryWriter()
+writer = SummaryWriter(log_dir="runs/nn.Linear_fp16")
 
 # DETR Model
 device = "cuda"
 
 backbone = ResNetBackbone()
-transformer = TransformerBitLinear(256, 8, 6, 6, 2048, 0.1)
+transformer = Transformer(256, 8, 6, 6, 2048, 0.1)
 model = DETR(backbone, transformer, num_classes=91, num_queries=100).to(device)
 
 matcher = HungarianMatcher()
@@ -66,26 +66,26 @@ for epochs in tqdm(range(500), desc="Training Progress"):
   scaler.step(optimizer)
   scaler.update()
 
-#with torch.profiler.profile(
-#    activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
-#    record_shapes=True, profile_memory=True
-#) as prof:
-#    with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
-#        outputs = model(x, x_mask)
-#        loss = criterion(outputs, y)
-#
-## Print profiler results
-#print(prof.key_averages().table(sort_by="cuda_memory_usage", row_limit=-1))
+with torch.profiler.profile(
+    activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
+    record_shapes=True, profile_memory=True
+) as prof:
+    with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
+        outputs_logits, output_boxes= model(x, x_mask)
+        loss = criterion(outputs_logits, outputs_boxes, y)
 
-## Inspect predictions
-#i = 3
-#with torch.no_grad():
-#  h, w = y[i]["size"]
-#  im = x[i].cpu().numpy().transpose((1,2,0))
-#  prob = outputs['pred_logits'][i,:].softmax(-1)[:, :-1]
-#  keep = prob.max(-1).values > 0.25
-#  plot_results(im, prob[keep], rescale_bboxes(outputs["pred_boxes"][i][keep,:], (w,h)))
-#
+# Print profiler results
+print(prof.key_averages().table(sort_by="cuda_memory_usage", row_limit=-1))
+
+# Inspect predictions
+i = 3
+with torch.no_grad():
+  h, w = y[i]["size"]
+  im = x[i].cpu().numpy().transpose((1,2,0))
+  prob = outputs_logits[i,:].softmax(-1)[:, :-1]
+  keep = prob.max(-1).values > 0.25
+  plot_results(im, prob[keep], rescale_bboxes(outputs_boxes[i][keep,:], (w,h)))
+
 ## Inspect ground truth
 #i = 3
 #h, w = y[i]["size"]

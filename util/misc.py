@@ -59,7 +59,7 @@ def plot_results(pil_img, prob, boxes):
     text = f'{CLASSES[cl]}: {p[cl]:0.2f}'
     ax.text(xmin, ymin, text, fontsize=15, bbox=dict(facecolor='yellow', alpha=0.5))
   plt.axis('off')
-  plt.show()
+  plt.savefig("predictions.png")
 
 class SmoothedValue(object):
     """Track a series of values and provide access to smoothed values over a
