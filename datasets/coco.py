@@ -1,8 +1,5 @@
-
 import torch, torchvision
-import torch.utils.data
-import torchvision
-from pathlib import Path
+# import torch.utils.data
 from pycocotools import mask as coco_mask
 
 class CocoDetection(torchvision.datasets.CocoDetection):
@@ -102,3 +99,20 @@ class ConvertCocoPolysToMask(object):
         target["size"] = torch.as_tensor([int(h), int(w)])
 
         return image, target
+    
+def collate_fn(batch):
+  images, labels = zip(*batch)
+
+  # if you are familiar with the old detr implementation, here remove the need of calling another function
+  max_size = torch.tensor([img.shape for img in images]).max(dim=0).values
+  c, h, w = max_size.tolist()
+  bsz = len(images)
+
+  padded_images = torch.zeros((bsz, c, h, w), dtype=images[0].dtype, device=images[0].device)
+  padding_mask  = torch.ones((bsz, h, w), dtype=torch.bool, device=images[0].device)
+  for i, img in enumerate(images):
+    _, h, w = img.shape
+    padded_images[i, :, :h, :w] = img
+    padding_mask[i, :h, :w] = False
+
+  return padded_images, padding_mask, labels
