@@ -1,16 +1,6 @@
-#import datetime
-#import json
-#import time
-#from torch.utils.data import DataLoader, DistributedSampler
-#import datasets
-#
-#import torch, random, argparse
-#import numpy as np
-
 import os, torch, deepspeed, time, datetime, random, argparse 
 import numpy as np
 from tqdm import tqdm
-from pathlib import Path
 from torch.utils.data import DataLoader
 
 import util.misc as utils
@@ -19,7 +9,6 @@ from models.transformer import Transformer, TransformerBitLinear
 from models.detr import DETR, SetCriterion
 from models.matcher import HungarianMatcher
 from datasets import build_dataset
-from engine import train_one_epoch
 
 def get_args_parser():
 	parser = argparse.ArgumentParser('Set transformer detector', add_help=False)
@@ -88,7 +77,6 @@ def get_args_parser():
 
 
 def main(args):
-	rank = int(os.getenv("LOCAL_RANK", "0"))
 
 	ds_config = {
   	"train_batch_size": args.batch_size,
@@ -99,23 +87,40 @@ def main(args):
   	  }
   	},
   	"fp16": {
-  	  "enabled": True
+  	  "enabled": True,
+			"auto_cast": True,
+			"loss_scale": 0,
+			"initial_scale_power": 11,
   	},
   	"zero_optimization": {
-			"stage": 0,
+			"stage": 1,
+		},
+		"tensorboard": {
+			"enabled": True,
+			"output_path": "run/",
+			"job_name": "train_detr_bitlinear",
+		},
+		"comms_logger": {
+			"enabled": True,
+			"verbose": False,
+			"prof_all": True,
+			"debug": False
 		}
 	}
 
-  # fix the seed for reproducibility (and your sanity)
+	rank = int(os.getenv("LOCAL_RANK", "0"))
+
 	seed = args.seed + rank
 	torch.manual_seed(seed)
 	np.random.seed(seed)
 	random.seed(seed)
     
-	# model and criterion
-	backbone = ResNetBackbone()		# currently not using the args
+	# model
+	backbone = ResNetBackbone()
 	transformer = TransformerBitLinear(args.hidden_dim, args.nheads, args.enc_layers, args.dec_layers, args.dim_feedforward, args.dropout)
 	model = DETR(backbone=backbone, transformer=transformer, num_classes=91, num_queries=args.num_queries)
+
+	# TODO: calculate the number of tenary parameters for transformers
 	n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
 	print('number of params:', n_parameters)
 
@@ -127,7 +132,6 @@ def main(args):
 	device = torch.device("cuda", rank)
 	model.to(device)
 	criterion.to(device)
-	print(f"Rank {rank} Device {device} - ZeRO Stage: {model_engine.zero_optimization_stage()}")
 
 	# create dataset
 	dataset_train = build_dataset(image_set='train', args=args)
@@ -135,12 +139,11 @@ def main(args):
 	# dataset_val   = build_dataset(image_set='val', args=args)
 	# sampler_val   = torch.utils.data.SequentialSampler(dataset_val)
 	# data_loader_val   = DataLoader(dataset_val, args.batch_size, sampler=sampler_val, drop_last=False, collate_fn=utils.collate_fn, num_workers=args.num_workers)
+
+	# TODO: understand if there's any difference between deepspeed dataloader and torch dataloader? My guess is deepspeed dataloader is just a wrapper
 	sampler_train = torch.utils.data.RandomSampler(dataset_train)
 	batch_sampler_train = torch.utils.data.BatchSampler(sampler_train, args.batch_size, drop_last=True)
 	data_loader_train = DataLoader(dataset_train, batch_sampler=batch_sampler_train, collate_fn=utils.collate_fn, num_workers=args.num_workers)
-
-	print("Start training")
-	start_time = time.time()
 
 	for epoch in range(args.start_epoch, args.epochs):
 		model.train()
@@ -158,15 +161,7 @@ def main(args):
 				loss = criterion(outputs_logits, outputs_boxes, targets)
 
 			model_engine.backward(loss)
-			torch.nn.utils.clip_grad_norm_(model_engine.parameters(), 0.1)
 			model_engine.step()
-
-			# if rank == 0:	print(loss.item())
-			# tepoch.set_postfix(loss=loss.item())		
-
-	total_time = time.time() - start_time
-	total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-	print('Training time {}'.format(total_time_str))		
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
