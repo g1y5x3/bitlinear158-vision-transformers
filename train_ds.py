@@ -52,6 +52,7 @@ def get_args_parser():
 	# Dataset parameters
 	parser.add_argument('--dataset_file', default='coco')
 	parser.add_argument('--coco_path', type=str)
+	parser.add_argument('--num_classes', default=91, type=int)
 	# Others
 	parser.add_argument('--output_dir', default='',
 											help='path where to save, empty for no saving')
@@ -112,21 +113,24 @@ def main(args):
 	torch.manual_seed(seed)
 	np.random.seed(seed)
 	random.seed(seed)
-    
+ 
+	# create dataset
+	# TODO: put transform and initalize dataset object here as well
+	dataset_train = build_dataset(image_set='train', args=args)
+   
 	# model
 	backbone = ResNetBackbone()
 	transformer = Transformer(args.hidden_dim, args.nheads, args.enc_layers, args.dec_layers, args.dim_feedforward, args.dropout)
-	model = DETR(backbone=backbone, transformer=transformer, num_classes=91, num_queries=args.num_queries)
+	model = DETR(backbone=backbone, transformer=transformer, num_classes=args.num_classes, num_queries=args.num_queries)
 
 	# TODO: calculate the number of tenary parameters for transformers
 	n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
 	print('number of params:', n_parameters)
 
 	matcher = HungarianMatcher(args.cost_class, args.cost_bbox, args.cost_giou)
-	criterion = SetCriterion(91, matcher, args.eos_coef, (args.dice_loss_coef, args.bbox_loss_coef, args.giou_loss_coef))
 
-	# create dataset
-	dataset_train = build_dataset(image_set='train', args=args)
+	# TODO: let criterion return all 3 losses and apply the weight at the end before backprop
+	criterion = SetCriterion(args.num_classes, matcher, args.eos_coef, weight=(args.dice_loss_coef, args.bbox_loss_coef, args.giou_loss_coef))
 
 	# deepseed initialization
 	model_engine, optimizer, data_loader_train, _ = deepspeed.initialize(model=model, model_parameters=model.parameters(), 

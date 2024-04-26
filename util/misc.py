@@ -49,7 +49,7 @@ def rescale_bboxes(out_bbox, size):
   return b
 
 def plot_results(pil_img, prob, boxes):
-  plt.figure(figsize=(8,5))
+  plt.figure()
   plt.imshow(pil_img)
   ax = plt.gca()
   colors = COLORS * 100
@@ -60,6 +60,7 @@ def plot_results(pil_img, prob, boxes):
     ax.text(xmin, ymin, text, fontsize=15, bbox=dict(facecolor='yellow', alpha=0.5))
   plt.axis('off')
   plt.savefig("predictions.png")
+  plt.show()
 
 class SmoothedValue(object):
     """Track a series of values and provide access to smoothed values over a
