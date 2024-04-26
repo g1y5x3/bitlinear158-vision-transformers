@@ -1,9 +1,7 @@
-import random
-
-import PIL
-import torch
+# TODO: how much of this can be replaced by albumentation
+import PIL, torch, random
+import torchvision.transforms as v2
 import torchvision.transforms.functional as F
-from torchvision.transforms import v2 as T
 
 from util.box_ops import box_xyxy_to_cxcywh
 from util.misc import interpolate
@@ -146,7 +144,7 @@ class RandomCrop(object):
         self.size = size
 
     def __call__(self, img, target):
-        region = T.RandomCrop.get_params(img, self.size)
+        region = v2.RandomCrop.get_params(img, self.size)
         return crop(img, target, region)
 
 
@@ -158,7 +156,7 @@ class RandomSizeCrop(object):
     def __call__(self, img: PIL.Image.Image, target: dict):
         w = random.randint(self.min_size, min(img.width, self.max_size))
         h = random.randint(self.min_size, min(img.height, self.max_size))
-        region = T.RandomCrop.get_params(img, [h, w])
+        region = v2.RandomCrop.get_params(img, [h, w])
         return crop(img, target, region)
 
 
@@ -206,19 +204,19 @@ class RandomPad(object):
 
 
 class RandomSelect(object):
-  """
-  Randomly selects between transforms1 and transforms2,
-  with probability p for transforms1 and (1 - p) for transforms2
-  """
-  def __init__(self, transforms1, transforms2, p=0.5):
-    self.transforms1 = transforms1
-    self.transforms2 = transforms2
-    self.p = p
+    """
+    Randomly selects between transforms1 and transforms2,
+    with probability p for transforms1 and (1 - p) for transforms2
+    """
+    def __init__(self, transforms1, transforms2, p=0.5):
+        self.transforms1 = transforms1
+        self.transforms2 = transforms2
+        self.p = p
 
-  def __call__(self, img, target):
-    if random.random() < self.p:
-      return self.transforms1(img, target)
-    return self.transforms2(img, target)
+    def __call__(self, img, target):
+        if random.random() < self.p:
+            return self.transforms1(img, target)
+        return self.transforms2(img, target)
 
 
 class ToTensor(object):
@@ -229,7 +227,7 @@ class ToTensor(object):
 class RandomErasing(object):
 
     def __init__(self, *args, **kwargs):
-        self.eraser = T.RandomErasing(*args, **kwargs)
+        self.eraser = v2.RandomErasing(*args, **kwargs)
 
     def __call__(self, img, target):
         return self.eraser(img), target
