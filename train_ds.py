@@ -1,12 +1,12 @@
 import os, torch, deepspeed, random, argparse 
 import numpy as np
 
-import util.misc as utils
+import datasets.transforms as T
 from models.backbone import ResNetBackbone
 from models.transformer import Transformer, TransformerBitLinear
 from models.detr import DETR, SetCriterion
 from models.matcher import HungarianMatcher
-from datasets import build_dataset
+from datasets.coco import CocoDetection, collate_fn
 
 def get_args_parser():
 	parser = argparse.ArgumentParser('Set transformer detector', add_help=False)
@@ -115,9 +115,27 @@ def main(args):
 	random.seed(seed)
  
 	# create dataset
-	# TODO: put transform and initalize dataset object here as well
-	dataset_train = build_dataset(image_set='train', args=args)
-   
+	scales = [480, 512, 544, 576, 608, 640, 672, 704, 736, 768, 800]
+	transform_train = T.Compose([
+	  # augumentation
+	  T.RandomHorizontalFlip(),
+	  T.RandomSelect(
+	    T.RandomResize(scales, max_size=1333),
+	    T.Compose([
+	      T.RandomResize([400, 500, 600]),
+	      T.RandomSizeCrop(384, 600),
+	      T.RandomResize(scales, max_size=1333),
+	    ])
+	  ),
+	  # normalize
+	  T.Compose([
+	    T.ToTensor(),
+	    T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+	  ])
+	])  
+	dataset_train = CocoDetection(args.coco_path+"/train2017", args.coco_path+"/annotations/instances_train2017.json", 
+															 	transform_train, return_masks=False)
+
 	# model
 	backbone = ResNetBackbone()
 	transformer = Transformer(args.hidden_dim, args.nheads, args.enc_layers, args.dec_layers, args.dim_feedforward, args.dropout)
@@ -134,7 +152,7 @@ def main(args):
 
 	# deepseed initialization
 	model_engine, optimizer, data_loader_train, _ = deepspeed.initialize(model=model, model_parameters=model.parameters(), 
-																																			 training_data=dataset_train, collate_fn=utils.collate_fn,	
+																																			 training_data=dataset_train, collate_fn=collate_fn,	
 																																			 config=ds_config)
 	device = torch.device("cuda", rank)
 	model.to(device)
