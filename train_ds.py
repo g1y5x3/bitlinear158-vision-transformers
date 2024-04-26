@@ -1,7 +1,5 @@
-import os, torch, deepspeed, time, datetime, random, argparse 
+import os, torch, deepspeed, random, argparse 
 import numpy as np
-from tqdm import tqdm
-from torch.utils.data import DataLoader
 
 import util.misc as utils
 from models.backbone import ResNetBackbone
@@ -98,7 +96,7 @@ def main(args):
 		"tensorboard": {
 			"enabled": True,
 			"output_path": "run/",
-			"job_name": "train_detr_bitlinear",
+			"job_name": "train_detr",
 		},
 		"comms_logger": {
 			"enabled": True,
@@ -117,7 +115,7 @@ def main(args):
     
 	# model
 	backbone = ResNetBackbone()
-	transformer = TransformerBitLinear(args.hidden_dim, args.nheads, args.enc_layers, args.dec_layers, args.dim_feedforward, args.dropout)
+	transformer = Transformer(args.hidden_dim, args.nheads, args.enc_layers, args.dec_layers, args.dim_feedforward, args.dropout)
 	model = DETR(backbone=backbone, transformer=transformer, num_classes=91, num_queries=args.num_queries)
 
 	# TODO: calculate the number of tenary parameters for transformers
@@ -127,23 +125,20 @@ def main(args):
 	matcher = HungarianMatcher(args.cost_class, args.cost_bbox, args.cost_giou)
 	criterion = SetCriterion(91, matcher, args.eos_coef, (args.dice_loss_coef, args.bbox_loss_coef, args.giou_loss_coef))
 
+	# create dataset
+	dataset_train = build_dataset(image_set='train', args=args)
+
 	# deepseed initialization
-	model_engine, optimizer, _, _ = deepspeed.initialize(model=model, model_parameters=model.parameters(), config=ds_config)
+	model_engine, optimizer, data_loader_train, _ = deepspeed.initialize(model=model, model_parameters=model.parameters(), 
+																																			 training_data=dataset_train, collate_fn=utils.collate_fn,	
+																																			 config=ds_config)
 	device = torch.device("cuda", rank)
 	model.to(device)
 	criterion.to(device)
 
-	# create dataset
-	dataset_train = build_dataset(image_set='train', args=args)
-
 	# dataset_val   = build_dataset(image_set='val', args=args)
 	# sampler_val   = torch.utils.data.SequentialSampler(dataset_val)
 	# data_loader_val   = DataLoader(dataset_val, args.batch_size, sampler=sampler_val, drop_last=False, collate_fn=utils.collate_fn, num_workers=args.num_workers)
-
-	# TODO: understand if there's any difference between deepspeed dataloader and torch dataloader? My guess is deepspeed dataloader is just a wrapper
-	sampler_train = torch.utils.data.RandomSampler(dataset_train)
-	batch_sampler_train = torch.utils.data.BatchSampler(sampler_train, args.batch_size, drop_last=True)
-	data_loader_train = DataLoader(dataset_train, batch_sampler=batch_sampler_train, collate_fn=utils.collate_fn, num_workers=args.num_workers)
 
 	for epoch in range(args.start_epoch, args.epochs):
 		model.train()
@@ -162,6 +157,8 @@ def main(args):
 
 			model_engine.backward(loss)
 			model_engine.step()
+
+		# TODO: add eval on rank=0
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])

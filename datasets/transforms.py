@@ -206,19 +206,19 @@ class RandomPad(object):
 
 
 class RandomSelect(object):
-    """
-    Randomly selects between transforms1 and transforms2,
-    with probability p for transforms1 and (1 - p) for transforms2
-    """
-    def __init__(self, transforms1, transforms2, p=0.5):
-        self.transforms1 = transforms1
-        self.transforms2 = transforms2
-        self.p = p
+  """
+  Randomly selects between transforms1 and transforms2,
+  with probability p for transforms1 and (1 - p) for transforms2
+  """
+  def __init__(self, transforms1, transforms2, p=0.5):
+    self.transforms1 = transforms1
+    self.transforms2 = transforms2
+    self.p = p
 
-    def __call__(self, img, target):
-        if random.random() < self.p:
-            return self.transforms1(img, target)
-        return self.transforms2(img, target)
+  def __call__(self, img, target):
+    if random.random() < self.p:
+      return self.transforms1(img, target)
+    return self.transforms2(img, target)
 
 
 class ToTensor(object):
