@@ -91,4 +91,24 @@ class SetCriterion(nn.Module):
 
     loss = self.weight[0]*loss_ce + self.weight[1]*loss_l1 + self.weight[2]*loss_giou
 
-    return loss 
+    return loss
+  
+  class PostProcess(nn.Module):
+    @torch.no_grad()
+    def forward(self, outputs_logits, outputs_boxes, target_sizes):
+      assert len(outputs_logits) == len(target_sizes)
+      assert target_sizes.shape[1] == 2
+
+      prob = F.softmax(outputs_logits)
+      scores, labels = prob[..., :-1].max(-1)
+
+      # convert to [x0, y0, x1, y1] format
+      boxes = box_convert(outputs_boxes,"cxcywh","xyxy")
+      # and from relative [0, 1] to absolute [0, height] coordinates
+      img_h, img_w = target_sizes.unbind(1)
+      scale_fct = torch.stack([img_w, img_h, img_w, img_h], dim=1)
+      boxes = boxes * scale_fct[:, None, :]
+
+      results = [{'scores': s, 'labels': l, 'boxes': b} for s, l, b in zip(scores, labels, boxes)]
+
+      return results

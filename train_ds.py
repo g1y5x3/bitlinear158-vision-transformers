@@ -93,6 +93,7 @@ def main(args):
   	},
   	"zero_optimization": {
 			"stage": 1,
+			"reduce_bucket_size": 5e8,
 		},
 		"tensorboard": {
 			"enabled": True,
@@ -133,8 +134,8 @@ def main(args):
 	    T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 	  ])
 	])  
-	dataset_train = CocoDetection(args.coco_path+"/train2017", args.coco_path+"/annotations/instances_train2017.json", 
-															 	transform_train, return_masks=False)
+	dataset_train = CocoDetection(args.coco_path + "/train2017", args.coco_path + "/annotations/instances_train2017.json", transform_train)
+	# TODO: add transform_test as well as dataset_eval
 
 	# model
 	backbone = ResNetBackbone()
@@ -158,19 +159,15 @@ def main(args):
 	model.to(device)
 	criterion.to(device)
 
-	# dataset_val   = build_dataset(image_set='val', args=args)
-	# sampler_val   = torch.utils.data.SequentialSampler(dataset_val)
-	# data_loader_val   = DataLoader(dataset_val, args.batch_size, sampler=sampler_val, drop_last=False, collate_fn=utils.collate_fn, num_workers=args.num_workers)
-
 	for epoch in range(args.start_epoch, args.epochs):
 		model.train()
 		criterion.train()
-
 		for samples, masks, targets in data_loader_train:
 			optimizer.zero_grad()
 
 			samples = samples.to(device)
-			masks = masks.to(device)
+			masks 	= masks.to(device)
+			# TODO: separate them into targets_class and target_bboxes
 			targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
 			with torch.autocast(device_type="cuda", dtype=torch.float16):
