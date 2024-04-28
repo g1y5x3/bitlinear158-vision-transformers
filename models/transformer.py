@@ -183,6 +183,8 @@ class TransformerEncoderLayerBitLinear(nn.Module):
     self.dropout = nn.Dropout(dropout) 
     self.linear2 = BitLinear(dim_feedforward, d_model)
 
+    self.norm1 = nn.LayerNorm(d_model)
+    self.norm2 = nn.LayerNorm(d_model)
     self.dropout1 = nn.Dropout(dropout)
     self.dropout2 = nn.Dropout(dropout)
 
@@ -193,10 +195,12 @@ class TransformerEncoderLayerBitLinear(nn.Module):
     q = k = src + src_pos
     self_attn = self.self_attn(q, k, src, key_padding_mask=src_key_padding_mask)
     src = src + self.dropout1(self_attn)
+    src = self.norm1(src)
 
     # feedforward
     ff = self.linear2(self.dropout(self.activation(self.linear1(src))))
     src = src + self.dropout2(ff)
+    src = self.norm2(src)
 
     return src
 
@@ -210,6 +214,9 @@ class TransformerDecoderLayerBitLinear(nn.Module):
     self.dropout = nn.Dropout(dropout) 
     self.linear2 = BitLinear(dim_feedforward, d_model)
 
+    self.norm1 = nn.LayerNorm(d_model)
+    self.norm2 = nn.LayerNorm(d_model)
+    self.norm3 = nn.LayerNorm(d_model)
     self.dropout1 = nn.Dropout(dropout)
     self.dropout2 = nn.Dropout(dropout)
     self.dropout3 = nn.Dropout(dropout)
@@ -222,16 +229,19 @@ class TransformerDecoderLayerBitLinear(nn.Module):
     q = k = tgt + query_pos # positional embedding is also added to each layer of the decoder
     self_attn = self.self_attn(q, k, tgt)
     tgt = tgt + self.dropout1(self_attn)
+    tgt = self.norm1(tgt)
 
     # cross-attention
     q = tgt + query_pos
     k = memory + memory_pos
     cross_attn = self.cross_attn(q, k, memory, key_padding_mask=memory_key_padding_mask)
     tgt = tgt + self.dropout2(cross_attn)
+    tgt = self.norm2(tgt)
 
     # feedforward
     ff = self.linear2(self.dropout(self.activation(self.linear1(tgt))))
     tgt = tgt + self.dropout3(ff)
+    tgt = self.norm3(tgt)
 
     return tgt
 
