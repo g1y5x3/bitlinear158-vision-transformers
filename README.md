@@ -72,12 +72,7 @@ $y = f(x) = \tilde{W}\tilde{x}$
    
    output  = F.linear(x_quant, w_quant) / (x_scale * w_scale)
    ```
-   `x_quant` and `w_quant` are $[-127, 127]$ (INT8) and $\{-1, 0, 1\}$ (INT2). 
-
-   This INT8 $\times$ INT2 matmul can be done using INT8 GEMM which should be more efficient than FP8 GEMM during the forward pass according to this 
-   [paper](https://arxiv.org/pdf/2303.17951.pdf) from Qualcoom,
-   > We have also seen that implementing the FP8 formats in hardware for inference is not efficient and incurs significant overhead. Depending on the 
-   accumulator size, the FP8 MAC units are 50% to 180% less efficient than their INT8 counterparts.
+   `x_quant` and `w_quant` are $[-127, 127]$ (INT8) and $\{-1, 0, 1\}$ (~INT2).
 
 3. If allowing $x$ to stay at FP16 but only quantize and rescale $W$ to tenary, it essentially becomes $f(x)=\tilde{W}\tilde{x}\beta$
    ```python
@@ -90,18 +85,19 @@ equivalent. A few tests in [models/bitlinear.py](models/bitlinear.py#L60) were c
 ## Reults
 ### DETR
 
-![nn.Linear vs BitLinear](figures/detr_1epoch.png)
+![nn.Linear vs BitLinear](figures/train_detr_1epoch.png)
 
 *Comparison between using nn.Linear and BitLinear in the transformer of DETR.*
 
 ## TODO
 - [x] rewrite the model to make the coder simplier, more readable, and easy to study.
-    - [x] implement `MultiheadAttention` from scratch but keep `F.scaled_dot_product_attention` to utilized the optimized flash attentions kernel.
-    - [x] remove the entirety of `NestedTensor` in DETR, the forward pass now takes two arguments both padded img and padding mask 
-    - [x] simply SetCriterion, only `l1_loss`, `giou_loss`, and `cross_entropy` were used to compute the gradients (this is the slowest part). 
-    - [x] training in float16 using `amp`
-    - [x] deepspeed integration for multigpu training (encouter some weird GPU crashing issue on A100s)
+   - [x] implement `MultiheadAttention` from scratch but keep `F.scaled_dot_product_attention` to utilized the optimized flash attentions kernel.
+   - [x] remove the entirety of `NestedTensor` in DETR, the forward pass now takes two arguments both padded img and padding mask 
+   - [x] simply SetCriterion, only `l1_loss`, `giou_loss`, and `cross_entropy` were used to compute the gradients (this is the slowest part). 
+   - [x] training in float16 using `amp`
+   - [ ] deepspeed integration for multigpu training 
+      - encouter weird GPU crashing issue on A100s
+- [ ] Use custom kernels from [BitBLAS](https://github.com/microsoft/BitBLAS/tree/main) for `F.linear`, currrently it doesn't support autograd.
 - [ ] perform a full COCO training comparison run with `nn.Linear` vs `BitLinear`
-- [ ] Use custom kernels from [BitBLAS](https://github.com/microsoft/BitBLAS/tree/main) for `F.linear`.
 - [ ] Maybe rewrite the data preprocessing from scratch, this is giving me pain.
 - [ ] Try `BitLinear` on DINO, LlaVa.
