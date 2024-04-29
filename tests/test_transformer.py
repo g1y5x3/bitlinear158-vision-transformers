@@ -95,7 +95,6 @@ encoder_old_output = encoder_old(x.transpose(0,1), src_key_padding_mask=x_mask, 
 encoder = TransformerEncoder(encoder_layer, 6)
 encoder_output = encoder(x, ~x_mask, x_embed)
 
-
 assert torch.allclose(encoder_output, encoder_old_output.transpose(0,1), rtol=1e-5, atol=1e-5), f"TransformerEncoder output miss match (with mask)!"
 
 print("TransformerDecoder...")
@@ -112,7 +111,7 @@ from tests.transformer_old import TransformerDecoder as TransformerDecoder_old
 decoder_old = TransformerDecoder_old(decoder_layer_old, 6, nn.LayerNorm(64)).to('cuda:0')
 decoder_old_output = decoder_old(y.transpose(0,1), x.transpose(0,1), memory_key_padding_mask=x_mask, pos=x_embed.transpose(0,1), query_pos=y_embed.transpose(0,1)).squeeze(0)
 
-decoder = TransformerDecoder(decoder_layer, 6, 64).to('cuda:0')
+decoder = TransformerDecoder(decoder_layer, 6).to('cuda:0')
 decoder_output = decoder(x, ~x_mask, x_embed, y, y_embed)
 
 assert torch.allclose(decoder_output, decoder_old_output.transpose(0,1), rtol=1e-5, atol=1e-5), f"TransformerDecoder output miss match (with mask)!"
