@@ -22,13 +22,14 @@ matmul = bitblas.Matmul(config=matmul_config)
 
 # Create input matrices
 input_tensor = torch.rand((1, 1024), dtype=torch.float16).cuda()
-weight_tensor = torch.randint(0, 7, (1024, 1024), dtype=torch.int8).cuda()
+weight_tensor = torch.randint(-1, 1, (1024, 1024), dtype=torch.int8).cuda()
 
 # Transform weight tensor to int2 data type
-weight_tensor_int4 = matmul.transform_weight(weight_tensor)
+weight_tensor_int2 = matmul.transform_weight(weight_tensor)
+print(weight_tensor_int2)
 
 # Perform mixed-precision matrix multiplication
-output_tensor = matmul(input_tensor, weight_tensor_int4)
+output_tensor = matmul(input_tensor, weight_tensor_int2)
 
 # Reference result using PyTorch matmul for comparison
 ref_result = torch.matmul(input_tensor, weight_tensor.t().to(torch.float16))
