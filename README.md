@@ -93,11 +93,14 @@ equivalent. A few tests in [models/bitlinear.py](models/bitlinear.py#L60) were c
 - [x] rewrite the model to make the coder simplier, more readable, and easy to study.
    - [x] implement `MultiheadAttention` from scratch but keep `F.scaled_dot_product_attention` to utilized the optimized flash attentions kernel.
    - [x] remove the entirety of `NestedTensor` in DETR, the forward pass now takes two arguments both padded img and padding mask 
-   - [x] simply SetCriterion, only `l1_loss`, `giou_loss`, and `cross_entropy` were used to compute the gradients (this is the slowest part). 
+   - [x] simply `SetCriterion` which is the biggest bottleneck of the training, only `l1_loss`, `giou_loss`, and `cross_entropy` were used to compute 
+         the gradients. Additionally, using `torch.Tensor` instead of a dictionary so the `all_reduce` can be applied automatically. 
    - [x] training in float16 using `amp`
    - [ ] deepspeed integration for multigpu training 
       - encouter weird GPU crashing issue on A100s
-- [ ] Use custom kernels from [BitBLAS](https://github.com/microsoft/BitBLAS/tree/main) for `F.linear`, currrently it doesn't support autograd.
-- [ ] perform a full COCO training comparison run with `nn.Linear` vs `BitLinear`
-- [ ] Maybe rewrite the data preprocessing from scratch, this is giving me pain.
+- [ ] Maybe use custom kernels from [BitBLAS](https://github.com/microsoft/BitBLAS/tree/main) for `F.linear`, currrently it doesn't support autograd.
+      Additionally, you only gain significant speed improvement when performing INT8xINT2.
+- [ ] Train a ViT, SwinViT backbone with ternaried weights.
+- [ ] perform a full COCO training comparison
+- [ ] Maybe rewrite the data preprocessing from scratch, cause this is giving me pain rightnow.
 - [ ] Try `BitLinear` on DINO, LlaVa.
