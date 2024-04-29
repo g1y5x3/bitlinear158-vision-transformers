@@ -98,7 +98,7 @@ def main(args):
 		"tensorboard": {
 			"enabled": True,
 			"output_path": "run/",
-			"job_name": "train_detr_bitlinear_int8-simulatedxint1.58-simulated",
+			"job_name": "train_detr_bitlinear_pred",
 		},
 		"comms_logger": {
 			"enabled": True,
