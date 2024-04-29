@@ -27,23 +27,14 @@ def weight_quant(w: Tensor):
   return quant, scale
 
 class BitLinear(nn.Linear):
-  def __init__(self, in_features:int, out_features: int, bias: bool=True, norm: nn.Module=nn.LayerNorm):
+  # FP16 x INT2
+  def __init__(self, in_features:int, out_features: int, bias: bool=True):
     super(BitLinear, self).__init__(in_features, out_features, bias)
-    self.norm = norm(self.in_features)
 
   def forward(self, x: Tensor) -> Tensor:
     w = self.weight
-    # x_norm = self.norm(x)
-    # x_quant, x_scale = activation_quant(x_norm)
     w_quant, w_scale = weight_quant(w)
-
-    # TODO: create an custom kernel to use INT8 GEMM
-    # output = F.linear(x_norm + (x_quant - x_norm).detach(), w + (w_quant - w).detach())
-
-    output = F.linear(x, w + (w_quant - w).detach())
-    # avoid inf https://github.com/microsoft/BitBLAS/blob/6033edc307ccc13c733e24fc4f5f263a9d5d6224/integration/BitNet/utils_quant.py#L133
-    # output = output / x_scale
-    output = output / w_scale
+    output = F.linear(x, w + (w_quant - w).detach()) / w_scale
     return output
 
 if __name__ == "__main__":
