@@ -76,6 +76,7 @@ def get_args_parser():
 
 
 def main(args):
+	deepspeed.init_distributed()
 
 	ds_config = {
   	"train_batch_size": args.batch_size,
@@ -138,9 +139,17 @@ def main(args):
 	# TODO: add transform_test as well as dataset_eval
 
 	# model
+	if rank != 0:
+		torch.distributed.barrier()
+
+	# TODO: use a ViT based backbone
 	backbone = ResNetBackbone()
 	transformer = TransformerBitLinear(args.hidden_dim, args.nheads, args.enc_layers, args.dec_layers, args.dim_feedforward, args.dropout)
 	# transformer = Transformer(args.hidden_dim, args.nheads, args.enc_layers, args.dec_layers, args.dim_feedforward, args.dropout)
+	
+	if rank == 0:
+		torch.distributed.barrier()
+
 	model = DETR(backbone=backbone, transformer=transformer, num_classes=args.num_classes, num_queries=args.num_queries)
 
 	# TODO: calculate the number of tenary parameters for transformers

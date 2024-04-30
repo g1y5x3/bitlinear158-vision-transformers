@@ -23,13 +23,11 @@ class DETR(nn.Module):
     self.query_embed = nn.Embedding(num_queries, num_hidden)
     self.transformer = transformer
     self.class_embed = BitLinear(num_hidden, num_classes + 1)
-    self.bbox_embed = nn.Sequential(
-      BitLinear(num_hidden, num_hidden),
-      nn.ReLU(),
-      BitLinear(num_hidden, num_hidden),
-      nn.ReLU(),
-      BitLinear(num_hidden, 4)
-    )
+    self.bbox_embed = nn.Sequential(BitLinear(num_hidden, num_hidden),
+                                    nn.ReLU(),
+                                    BitLinear(num_hidden, num_hidden),
+                                    nn.ReLU(),
+                                    BitLinear(num_hidden, 4))
 
   def forward(self, x: Tensor, mask: Tensor=None):
     bsz, _, h, w = x.shape
