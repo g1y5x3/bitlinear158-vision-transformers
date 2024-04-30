@@ -5,10 +5,10 @@ the proposed `BitLinear` can also work across all modality on applications other
 
 ## DETR (Detection Transformer)
 After some attempts to modify DETR base on some of the most popular computer vision libraries such as __ultralytics__, __mmdet__, __detectron2__, it
-felt like I was editing _yaml_ files most of the time which was quite frustrating. The implementation from huggingface seems more straight forward
-but the code also looks very similar to [original detr repo](https://github.com/facebookresearch/detr), which was a bit out dated, e.g, it didn't
-support mixed precision, it has low GPU utilization during training. Moreoever, it felt a bit too complex for an idea that is fairly straight forward.
-Therefore, I decided to rewrite everything with the goal to make it easy to read, study, build and hack around.
+felt like I was editing _yaml_ files most of the time which was quite frustrating. The implementation from __huggingface__ seems more straight forward
+but I got lost in too many if statements and hard for me to understand what the original DETR model is about. Therefore I based this repo off the 
+[original detr repo](https://github.com/facebookresearch/detr), which was a bit out dated, e.g, it didn't support mixed precision, it has low GPU utilization 
+during training. Therefore, I decided to rewrite everything from scratchwith the goal to make it easy to read, study, and hack around.
 __(still a work in progress to remove the complexity, dataloading and preprocessing is another big mess)__
 
 ## Notes on BitLinear
@@ -84,10 +84,17 @@ equivalent. A few tests in [models/bitlinear.py](models/bitlinear.py#L60) were c
 
 ## Reults
 ### DETR
+To clarify, the ResNet-50 backbone are still in FP16 since there is no ternary weight backbone available at this point. During training, all the
+weights from the transformer were completely ternarized which resulted at around 17M ternarized parameters out of 40M total model parameters.
 
-![nn.Linear vs BitLinear](figures/train_detr_1epoch.png)
-
-*Comparison between using nn.Linear and BitLinear in the transformer of DETR.*
+__Currently, the analysis are based on training the model for only 1 epoch. Perform a full training on the COCO dataset would take days given the 
+compute resouces that is avaiable to me.__ As you can see in the loss curve, when fully quantize the inputs into 8 bits and the weights into ternary 
+state, the model's training loss suffers pretty significantly. However, if keeping the inputs at FP16 precision and only ternaried the model weights,
+the gap between the quantized model and the original model becomes much closer.
+<figure>
+  <img src="figures/train_detr_1epoch.png">
+  <figcaption>Comparison between using nn.Linear (fp16 X fp16) and BitLinear (fp16 X int1.58-simulated, int8-simulated X int1.58-simulated) in the transformer of DETR.</figcaption>
+</figure>
 
 ## TODO
 - [x] rewrite the model to make the coder simplier, more readable, and easy to study.
@@ -100,7 +107,8 @@ equivalent. A few tests in [models/bitlinear.py](models/bitlinear.py#L60) were c
       - encouter weird GPU crashing issue on A100s
 - [ ] Maybe use custom kernels from [BitBLAS](https://github.com/microsoft/BitBLAS/tree/main) for `F.linear`, currrently it doesn't support autograd.
       Additionally, you only gain significant speed improvement when performing INT8xINT2.
-- [ ] Train a ViT, SwinViT backbone with ternaried weights.
+- [ ] Train a ViT, SwinViT backbone with ternaried weights. Specifically, swin-v2 has a 3B parameters model which would put it at the same parameter scale with the model size 
+      reported in the [BitNet1.58 paper](https://arxiv.org/pdf/2402.17764)
 - [ ] perform a full COCO training comparison
 - [ ] Maybe rewrite the data preprocessing from scratch, cause this is giving me pain rightnow.
 - [ ] Try `BitLinear` on DINO, LlaVa.
