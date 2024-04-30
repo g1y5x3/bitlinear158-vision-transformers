@@ -4,6 +4,8 @@ import torch.nn.functional as F
 from torch import nn, Tensor
 from torchvision.ops import box_convert
 from torchvision.ops import generalized_box_iou_loss as giou_loss
+
+from models.bitlinear import BitLinear
 from models.position_encoding import PositionEmbeddingSine
 
 
@@ -20,14 +22,12 @@ class DETR(nn.Module):
     self.input_proj = nn.Conv2d(num_channels, num_hidden, kernel_size=1)
     self.query_embed = nn.Embedding(num_queries, num_hidden)
     self.transformer = transformer
-    self.class_embed = nn.Linear(num_hidden, num_classes + 1)
-    self.bbox_embed = nn.Sequential(
-      nn.Linear(num_hidden, num_hidden),
-      nn.ReLU(),
-      nn.Linear(num_hidden, num_hidden),
-      nn.ReLU(),
-      nn.Linear(num_hidden, 4)
-    )
+    self.class_embed = BitLinear(num_hidden, num_classes + 1)
+    self.bbox_embed = nn.Sequential(BitLinear(num_hidden, num_hidden),
+                                    nn.ReLU(),
+                                    BitLinear(num_hidden, num_hidden),
+                                    nn.ReLU(),
+                                    BitLinear(num_hidden, 4))
 
   def forward(self, x: Tensor, mask: Tensor=None):
     bsz, _, h, w = x.shape
@@ -50,9 +50,6 @@ class DETR(nn.Module):
     pred_logits = self.class_embed(output_embedding)
     pred_boxes = self.bbox_embed(output_embedding).sigmoid()
     
-    # TODO: Does the output really need to be dictionary?
-    # outputs = {'pred_logits': outputs_class, 'pred_boxes': outputs_coord}
-
     return pred_logits, pred_boxes
 
 class SetCriterion(nn.Module):

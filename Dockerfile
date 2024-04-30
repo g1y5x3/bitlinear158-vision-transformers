@@ -6,7 +6,9 @@ RUN apt-get update && \
     apt-get install -y git  && \
     apt-get install -y tmux && \
     apt-get install -y unzip && \
-    apt-get -y install python3-pip && \
+    apt-get install -y libaio-dev && \
+    apt-get install -y python3-pip && \
+    apt-get install -y numactl && \
     pip install wandb && \
     pip install transformers && \
     pip install ipywidgets && \

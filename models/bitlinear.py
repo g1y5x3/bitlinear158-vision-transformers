@@ -9,31 +9,63 @@ The Era of 1-bit LLMs: https://arxiv.org/pdf/2402.17764v1.pdf
 FAQ:                   https://github.com/microsoft/unilm/blob/master/bitnet/The-Era-of-1-bit-LLMs__Training_Tips_Code_FAQ.pdf
 """
 
-import torch
+import torch, bitblas
 import torch.nn as nn
 import torch.nn.functional as F
 
 from torch import Tensor
 
-
-def activation_quant(x: Tensor):
-  scale = 127.0 / x.abs().max(dim=-1, keepdim=True).values.clamp(min=1e-5)
-  quant = (x * scale).round().clamp(-128, 127)
-  return quant, scale
-
-def weight_quant(w: Tensor):
-  scale = 1.0 / w.abs().mean().clamp(min=1e-5)
-  quant = (w * scale).round().clamp(-1, 1)
-  return quant, scale
-
-class BitLinear(nn.Linear):
-  # FP16 x INT2
+# Bitblas does not support autograd yet
+class BitBLASLinear(nn.Linear):
   def __init__(self, in_features:int, out_features: int, bias: bool=True):
     super(BitLinear, self).__init__(in_features, out_features, bias)
+    matmul_config = bitblas.MatmulConfig(
+      N=self.out_features,  # N dimension
+      K=self.in_features,   # K dimension
+      A_dtype="float16",  # activation A dtype
+      W_dtype="int2",  # weight W dtype
+      accum_dtype="float16",  # accumulation dtype
+      out_dtype="float16",    # output dtype
+      layout="nt",  # matrix layout, "nt" indicates the layout of A is non-transpose and the layout of W is transpose
+      with_bias=bias,  # bias
+      # configs for weight only quantization
+      group_size=None,  # setting for grouped quantization
+      with_scaling=False,  # setting for scaling factor
+      with_zeros=False,  # setting for zeros
+      zeros_mode=None,  # setting for how to calculating zeros
+    )
+    self.matmul = bitblas.Matmul(config=matmul_config)
+  
+  def weight_quant(self, w: Tensor):
+    w = w.float()
+    s = 1 / w.abs().mean().clamp(min=1e-5)
+    w_quant = (w*s).round().clamp(-1,1)
+    return w_quant.type(torch.int8), s
 
   def forward(self, x: Tensor) -> Tensor:
     w = self.weight
-    w_quant, w_scale = weight_quant(w)
+    w_quant, w_scale = self.weight_quant(w)
+    output = self.matmul(x, w_quant) / w_scale
+    return output
+
+class BitLinear(nn.Linear):
+  # FP16 x INT1.58 (simulated by FP16)
+  def __init__(self, in_features:int, out_features: int, bias: bool=True):
+    super(BitLinear, self).__init__(in_features, out_features, bias)
+
+  def activation_quant(self, x: Tensor):
+    scale = 127.0 / x.abs().max(dim=-1, keepdim=True).values.clamp(min=1e-5)
+    quant = (x * scale).round().clamp(-128, 127)
+    return quant, scale
+
+  def weight_quant(self, w: Tensor):
+    scale = 1.0 / w.abs().mean().clamp(min=1e-5)
+    quant = (w * scale).round().clamp(-1, 1)
+    return quant, scale
+
+  def forward(self, x: Tensor) -> Tensor:
+    w = self.weight
+    w_quant, w_scale = self.weight_quant(w)
     output = F.linear(x, w + (w_quant - w).detach()) / w_scale
     return output
 
