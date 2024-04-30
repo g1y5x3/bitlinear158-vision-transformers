@@ -135,31 +135,31 @@ def main(args):
 	    T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 	  ])
 	])  
+
+	# to avoid downloading the same file at the same time during model initialization
+	if rank != 0: torch.distributed.barrier()
+
 	dataset_train = CocoDetection(args.coco_path + "/train2017", args.coco_path + "/annotations/instances_train2017.json", transform_train)
 	# TODO: add transform_test as well as dataset_eval
-
 	# model
-	if rank != 0:
-		torch.distributed.barrier()
-
 	# TODO: use a ViT based backbone
 	backbone = ResNetBackbone()
 	transformer = TransformerBitLinear(args.hidden_dim, args.nheads, args.enc_layers, args.dec_layers, args.dim_feedforward, args.dropout)
 	# transformer = Transformer(args.hidden_dim, args.nheads, args.enc_layers, args.dec_layers, args.dim_feedforward, args.dropout)
 	
-	if rank == 0:
-		torch.distributed.barrier()
-
 	model = DETR(backbone=backbone, transformer=transformer, num_classes=args.num_classes, num_queries=args.num_queries)
-
-	# TODO: calculate the number of tenary parameters for transformers
-	n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
-	print('number of params:', n_parameters)
 
 	matcher = HungarianMatcher(args.cost_class, args.cost_bbox, args.cost_giou)
 
 	# TODO: let criterion return all 3 losses and apply the weight at the end before backprop
 	criterion = SetCriterion(args.num_classes, matcher, args.eos_coef, weight=(args.dice_loss_coef, args.bbox_loss_coef, args.giou_loss_coef))
+
+	# downloaded is finished so other rank can continue
+	if rank == 0: torch.distributed.barrier()
+
+	# TODO: calculate the number of tenary parameters for transformers
+	n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
+	print('number of params:', n_parameters)
 
 	# deepseed initialization
 	model_engine, optimizer, data_loader_train, _ = deepspeed.initialize(model=model, model_parameters=model.parameters(), 
