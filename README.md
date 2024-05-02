@@ -100,15 +100,17 @@ the gap between the quantized model and the original model becomes much closer.
 - [x] rewrite the model to make the coder simplier, more readable, and easy to study.
    - [x] implement `MultiheadAttention` from scratch but keep `F.scaled_dot_product_attention` to utilized the optimized flash attentions kernel.
    - [x] remove the entirety of `NestedTensor` in DETR, the forward pass now takes two arguments both padded img and padding mask 
-   - [x] simply `SetCriterion` which is the biggest bottleneck of the training, only `l1_loss`, `giou_loss`, and `cross_entropy` were used to compute 
-         the gradients. Additionally, using `torch.Tensor` instead of a dictionary so the `all_reduce` can be applied automatically. 
+   - [x] simply `SetCriterion` which is the biggest bottleneck of the training (need to profile it), only `l1_loss`, `giou_loss`, and `cross_entropy`
+         were used to compute the gradients. Additionally, using `torch.Tensor` instead of a dictionary so the `all_reduce` can be applied 
+         automatically. 
    - [x] training in float16 using `amp`
-   - [ ] deepspeed integration for multigpu training 
-      - encouter weird GPU crashing issue on A100s
-- [ ] Maybe use custom kernels from [BitBLAS](https://github.com/microsoft/BitBLAS/tree/main) for `F.linear`, currrently it doesn't support autograd.
-      Additionally, you only gain significant speed improvement when performing INT8xINT2.
-- [ ] Train a ViT, SwinViT backbone with ternaried weights. Specifically, swin-v2 has a 3B parameters model which would put it at the same parameter scale with the model size 
-      reported in the [BitNet1.58 paper](https://arxiv.org/pdf/2402.17764)
-- [ ] perform a full COCO training comparison
-- [ ] Maybe rewrite the data preprocessing from scratch, cause this is giving me pain rightnow.
+   - [x] deepspeed integration for multigpu training 
+- [ ] Use custom kernels from [BitBLAS](https://github.com/microsoft/BitBLAS/tree/main) for `F.linear`, however currrently it doesn't support autograd.
+      In addition, based on their [reported benchmarks](https://github.com/microsoft/BitBLAS/blob/main/images/figures/op_benchmark_a100_wq_gemm_e7.png), 
+      you only gain significant speed improvement when computing the GEMM in INT8xINT2.
+- [ ] Train a ViT, SwinViT backbone with ternaried weights. Specifically, swin-v2 has a 3B parameters model which would put it at the same parameter 
+      scale with the model size reported in the [BitNet1.58 paper](https://arxiv.org/pdf/2402.17764)
+- [ ] Once there's a backbone with ternarized weight, perform a full COCO training comparison
+- [ ] Rewrite the image preprocessing from scratch utilizing `Albumentation`, this is surprisingly painful right now. Maybe even benchmark it against 
+      `torchvision.transform.v2`
 - [ ] Try `BitLinear` on DINO, LlaVa.
