@@ -5,10 +5,10 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import SequentialSampler, BatchSampler, DataLoader
 
 from datasets import build_dataset
-from models.backbone import ResNetBackbone
-from models.transformer import TransformerBitLinear, Transformer
-from models.detr import DETR, SetCriterion
-from models.matcher import HungarianMatcher
+from model.backbone import ResNetBackbone
+from model.transformer import TransformerBitLinear, DETRTransformer
+from model.detr import DETR, SetCriterion
+from model.matcher import HungarianMatcher
 from util.misc import collate_fn
 from util.misc import rescale_bboxes, plot_results
 
@@ -38,7 +38,7 @@ writer = SummaryWriter(log_dir="runs/nn.Linear_fp16")
 device = "cuda"
 
 backbone = ResNetBackbone()
-transformer = Transformer(256, 8, 6, 6, 2048, 0.1)
+transformer = DETRTransformer(256, 8, 6, 6, 2048, 0.1)
 model = DETR(backbone, transformer, num_classes=91, num_queries=100).to(device)
 
 matcher = HungarianMatcher()

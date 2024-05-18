@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn, Tensor
 
-from models.bitlinear import BitLinear
+from bitlinear import BitLinear
 
 
 """https://arxiv.org/abs/1910.07467"""
@@ -54,7 +54,7 @@ class MultiheadAttention(nn.Module):
 
     return attn_output
 
-class TransformerEncoderLayer(nn.Module):
+class DETRTransformerEncoderLayer(nn.Module):
   def __init__(self, d_model: int, nhead: int, dim_feedforward: int=2048, dropout: float=0.1):
     super().__init__()
     self.self_attn = MultiheadAttention(d_model, nhead, dropout=dropout)
@@ -153,13 +153,13 @@ class TransformerDecoder(nn.Module):
     
     return output
 
-class Transformer(nn.Module):
+class DETRTransformer(nn.Module):
   def __init__(self, d_model=512, nhead=8, num_encoder_layers=6, num_decoder_layers=6, dim_feedforward=2048, dropout=0.1):
     super().__init__()
     self.d_model = d_model
     self.nhead   = nhead
 
-    encoder_layer = TransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout)
+    encoder_layer = DETRTransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout)
     self.encoder  = TransformerEncoder(encoder_layer, num_encoder_layers)
 
     decoder_layer = TransformerDecoderLayer(d_model, nhead, dim_feedforward, dropout)

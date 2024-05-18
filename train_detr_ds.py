@@ -1,12 +1,12 @@
 import os, torch, deepspeed, random, argparse 
 import numpy as np
 
-import datasets.transforms as T
-from models.backbone import ResNetBackbone
-from models.transformer import Transformer, TransformerBitLinear
-from models.detr import DETR, SetCriterion
-from models.matcher import HungarianMatcher
-from datasets.coco import CocoDetection, collate_fn
+import dataset.transforms as T
+from model.backbone import ResNetBackbone
+from model.transformer import Transformer, TransformerBitLinear
+from model.detr import DETR, SetCriterion
+from model.matcher import HungarianMatcher
+from dataset.coco import CocoDetection, collate_fn
 
 def get_args_parser():
 	parser = argparse.ArgumentParser('Set transformer detector', add_help=False)

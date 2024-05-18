@@ -5,8 +5,8 @@ from torch import nn, Tensor
 from torchvision.ops import box_convert
 from torchvision.ops import generalized_box_iou_loss as giou_loss
 
-from models.bitlinear import BitLinear
-from models.position_encoding import PositionEmbeddingSine
+from bitlinear import BitLinear
+from position_encoding import PositionEmbeddingSine
 
 
 # TODO: separate the encoder and decoder when applying to other DETR variant
