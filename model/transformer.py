@@ -54,6 +54,7 @@ class MultiheadAttention(nn.Module):
 
     return attn_output
 
+# postional embedding was added to each layer of the transformer encoder for DETR
 class DETRTransformerEncoderLayer(nn.Module):
   def __init__(self, d_model: int, nhead: int, dim_feedforward: int=2048, dropout: float=0.1):
     super().__init__()
