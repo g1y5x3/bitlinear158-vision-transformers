@@ -2,7 +2,6 @@ import copy
 import torch
 import torch.nn.functional as F
 from torch import nn, Tensor
-from model.bitlinear import BitLinear
 
 
 class MultiheadAttention(nn.Module):
@@ -70,7 +69,7 @@ class TransformerDecoder(nn.Module):
 class DETREncoderLayer(nn.Module):
   def __init__(self, d_model: int, nhead: int, dim_feedforward: int=2048, dropout: float=0.1, linear_layer: nn.Module=nn.Linear):
     super().__init__()
-    self.self_attn = MultiheadAttention(d_model, nhead, dropout=dropout, linear_layer=BitLinear)
+    self.self_attn = MultiheadAttention(d_model, nhead, dropout=dropout, linear_layer=linear_layer)
 
     self.linear1 = linear_layer(d_model, dim_feedforward)
     self.dropout = nn.Dropout(dropout) 
@@ -100,8 +99,8 @@ class DETREncoderLayer(nn.Module):
 class DETRDecoderLayer(nn.Module):
   def __init__(self, d_model: int, nhead: int, dim_feedforward: int=2048, dropout: float=0.1, linear_layer: nn.Module=nn.Linear):
     super().__init__()
-    self.self_attn  = MultiheadAttention(d_model, nhead, dropout=dropout, linear_layer=BitLinear)
-    self.cross_attn = MultiheadAttention(d_model, nhead, dropout=dropout, linear_layer=BitLinear)
+    self.self_attn  = MultiheadAttention(d_model, nhead, dropout=dropout, linear_layer=linear_layer)
+    self.cross_attn = MultiheadAttention(d_model, nhead, dropout=dropout, linear_layer=linear_layer)
 
     self.linear1 = linear_layer(d_model, dim_feedforward)
     self.dropout = nn.Dropout(dropout) 

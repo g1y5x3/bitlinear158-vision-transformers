@@ -1,9 +1,17 @@
-import torch
-import torch.nn as nn
-
 # a hack to deal with not installing as a library
 import sys
 sys.path.append('.')
+
+import pytest
+import torch
+import torch.nn as nn
+from model.transformer import MultiheadAttention, DETREncoderLayer, DETRDecoderLayer, TransformerEncoder, TransformerDecoder, DETRTransformer
+from tests.transformer_detr import TransformerEncoderLayer as TransformerEncoderLayer_old
+from tests.transformer_detr import TransformerDecoderLayer as TransformerDecoderLayer_old
+from tests.transformer_detr import TransformerEncoder as TransformerEncoder_old
+from tests.transformer_detr import TransformerDecoder as TransformerDecoder_old
+from tests.transformer_detr import Transformer as Transformer_old
+
 
 def copy_attn_weight(mha, torch_mha, dim):
   with torch.no_grad():
@@ -16,127 +24,94 @@ def copy_attn_weight(mha, torch_mha, dim):
     mha.out_proj.weight.copy_(torch_mha.out_proj.weight)
     mha.out_proj.bias.copy_(torch_mha.out_proj.bias)
 
-print("MultiheadAttention...")
+@pytest.fixture(scope="module")
+def device():
+  return torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-x = torch.rand(4, 32, 64).to('cuda:0')
-x_mask = (torch.rand(4, 32) < 0.3).to('cuda:0')
+def test_multihead_attention(device):
+  x = torch.rand(4, 32, 64).to(device)
+  x_mask = (torch.rand(4, 32) < 0.3).to(device)
 
-from model.transformer import MultiheadAttention
+  torch_mha = nn.MultiheadAttention(64, 8, dropout=0.0, batch_first=True).to(device)
+  mha = MultiheadAttention(64, 8, dropout=0.0).to(device)
+  copy_attn_weight(mha, torch_mha, 64)
 
-torch_mha = nn.MultiheadAttention(64, 8, dropout=0.0, batch_first=True).to('cuda:0')
-mha = MultiheadAttention(64, 8, dropout=0.0).to('cuda:0')
-copy_attn_weight(mha, torch_mha, 64)
+  torch_output = torch_mha(x, x, x, key_padding_mask=None, need_weights=False)[0]
+  output = mha(x, x, x, key_padding_mask=None)
 
-torch_output = torch_mha(x, x, x, key_padding_mask=None, need_weights=False)[0]
-output = mha(x, x, x, key_padding_mask=None)
+  assert torch.allclose(output, torch_output, rtol=1e-5, atol=1e-5), f"MultiheadAttention output miss match (without mask)!"
 
-assert torch.allclose(output, torch_output, rtol=1e-5, atol=1e-5), f"MultiheadAttention output miss match (without mask)!"
+  torch_output = torch_mha(x, x, x, key_padding_mask=x_mask, need_weights=False)[0]
+  output = mha(x, x, x, key_padding_mask=~x_mask)
 
-torch_output = torch_mha(x, x, x, key_padding_mask=x_mask, need_weights=False)[0]
-output = mha(x, x, x, key_padding_mask=~x_mask)
+  assert torch.allclose(output, torch_output, rtol=1e-5, atol=1e-5), f"MultiheadAttention output miss match (with mask)!"
 
-assert torch.allclose(output, torch_output, rtol=1e-5, atol=1e-5), f"MultiheadAttention output miss match (with mask)!"
+def test_transformer_encoder(device):
+  x = torch.rand(4, 32, 64).to(device)
+  x_mask = (torch.rand(4, 32) < 0.3).to(device)
+  x_embed = torch.rand(4, 32, 64).to(device)
 
-print("TransformerEncoderLayer...")
+  encoder_layer_old = TransformerEncoderLayer_old(64, 8, 128, dropout=0.0).to(device)
+  layer_old_output = encoder_layer_old(x.transpose(0,1), src_key_padding_mask=x_mask, pos=x_embed.transpose(0,1))
 
-x = torch.rand(4, 32, 64).to('cuda:0')
-x_mask = (torch.rand(4, 32) < 0.3).to('cuda:0')
-x_embed = torch.rand(4, 32, 64).to('cuda:0')
+  encoder_layer = DETREncoderLayer(64, 8, 128, dropout=0.0).to(device)
+  encoder_layer.load_state_dict(encoder_layer_old.state_dict(), strict=False)
+  copy_attn_weight(encoder_layer.self_attn, encoder_layer_old.self_attn, 64)
+  layer_output = encoder_layer(x, src_key_padding_mask=~x_mask, src_pos=x_embed)
 
-from model.transformer import DETREncoderLayer
-from tests.transformer_old import TransformerEncoderLayer as TransformerEncoderLayer_old
+  assert torch.allclose(layer_output, layer_old_output.transpose(0,1), rtol=1e-5, atol=1e-5), f"TransformerEncoderLayer output miss match (with mask)!"
 
-encoder_layer_old = TransformerEncoderLayer_old(64, 8, 128, dropout=0.0).to('cuda:0')
-layer_old_output = encoder_layer_old(x.transpose(0,1), src_key_padding_mask=x_mask, pos=x_embed.transpose(0,1))
+  encoder_old = TransformerEncoder_old(encoder_layer_old, 6)
+  encoder_old_output = encoder_old(x.transpose(0,1), src_key_padding_mask=x_mask, pos=x_embed.transpose(0,1))
 
-encoder_layer = DETREncoderLayer(64, 8, 128, dropout=0.0).to('cuda:0')
-encoder_layer.load_state_dict(encoder_layer_old.state_dict(), strict=False)
-copy_attn_weight(encoder_layer.self_attn, encoder_layer_old.self_attn, 64)
-layer_output = encoder_layer(x, src_key_padding_mask=~x_mask, src_pos=x_embed)
+  encoder = TransformerEncoder(encoder_layer, 6)
+  encoder_output = encoder(x, ~x_mask, x_embed)
 
-assert torch.allclose(layer_output, layer_old_output.transpose(0,1), rtol=1e-5, atol=1e-5), f"TransformerEncoderLayer output miss match (with mask)!"
+  assert torch.allclose(encoder_output, encoder_old_output.transpose(0,1), rtol=1e-5, atol=1e-5), f"TransformerEncoder output miss match (with mask)!"
 
-print("TransformerDecoderLayer...")
+def test_transformer_decoder(device):
+  x = torch.rand(4, 32, 64).to(device)
+  x_mask = (torch.rand(4, 32) < 0.3).to(device)
+  x_embed = torch.rand(4, 32, 64).to(device)
+  y = torch.rand(4, 16, 64).to(device)
+  y_embed = torch.rand(4, 16, 64).to(device)
 
-x = torch.rand(4, 32, 64).to('cuda:0')
-x_mask = (torch.rand(4, 32) < 0.3).to('cuda:0')
-x_embed = torch.rand(4, 32, 64).to('cuda:0')
-y = torch.rand(4, 16, 64).to('cuda:0')
-y_embed = torch.rand(4, 16, 64).to('cuda:0')
+  decoder_layer_old = TransformerDecoderLayer_old(64, 8, 128, dropout=0.0).to(device)
+  layer_old_output = decoder_layer_old(tgt=y.transpose(0,1), memory=x.transpose(0,1), memory_key_padding_mask=x_mask, 
+                                       pos=x_embed.transpose(0,1), query_pos=y_embed.transpose(0,1))
 
-from model.transformer import DETRDecoderLayer
-from tests.transformer_old import TransformerDecoderLayer as TransformerDecoderLayer_old
+  decoder_layer = DETRDecoderLayer(64, 8, 128, dropout=0.0).to(device)
+  decoder_layer.load_state_dict(decoder_layer_old.state_dict(), strict=False)
+  copy_attn_weight(decoder_layer.self_attn, decoder_layer_old.self_attn, 64)
+  copy_attn_weight(decoder_layer.cross_attn, decoder_layer_old.multihead_attn, 64)
+  layer_output = decoder_layer(memory=x, memory_key_padding_mask=~x_mask, memory_pos=x_embed, tgt=y, query_pos=y_embed)
 
-decoder_layer_old = TransformerDecoderLayer_old(64, 8, 128, dropout=0.0).to('cuda:0')
-layer_old_output = decoder_layer_old(tgt=y.transpose(0,1), memory=x.transpose(0,1), memory_key_padding_mask=x_mask, 
-                                     pos=x_embed.transpose(0,1), query_pos=y_embed.transpose(0,1))
+  assert torch.allclose(layer_output, layer_old_output.transpose(0,1), rtol=1e-5, atol=1e-5), f"TransformerDecoderLayer output miss match (with mask)!"
 
-decoder_layer = DETRDecoderLayer(64, 8, 128, dropout=0.0).to('cuda:0')
-decoder_layer.load_state_dict(decoder_layer_old.state_dict(), strict=False)
-copy_attn_weight(decoder_layer.self_attn, decoder_layer_old.self_attn, 64)
-copy_attn_weight(decoder_layer.cross_attn, decoder_layer_old.multihead_attn, 64)
-layer_output = decoder_layer(memory=x, memory_key_padding_mask=~x_mask, memory_pos=x_embed,
-                             tgt=y, query_pos=y_embed)
+  decoder_old = TransformerDecoder_old(decoder_layer_old, 6, nn.LayerNorm(64)).to(device)
+  decoder_old_output = decoder_old(y.transpose(0,1), x.transpose(0,1), memory_key_padding_mask=x_mask, pos=x_embed.transpose(0,1), 
+                                   query_pos=y_embed.transpose(0,1)).squeeze(0)
 
-assert torch.allclose(layer_output, layer_old_output.transpose(0,1), rtol=1e-5, atol=1e-5), f"TransformerDecoderLayer output miss match (with mask)!"
+  decoder = TransformerDecoder(decoder_layer, 6).to(device)
+  decoder_output = decoder(x, ~x_mask, x_embed, y, y_embed)
 
-print("TransformerEncoder...")
+  assert torch.allclose(decoder_output, decoder_old_output.transpose(0,1), rtol=1e-5, atol=1e-5), f"TransformerDecoder output miss match (with mask)!"
 
-x = torch.rand(4, 32, 64).to('cuda:0')
-x_mask = (torch.rand(4, 32) < 0.3).to('cuda:0')
-x_embed = torch.rand(4, 32, 64).to('cuda:0')
+def test_transformer(device):
+  x = torch.rand(4, 32, 8, 8).to(device)
+  x_embed = torch.rand(4, 32, 8, 8).to(device)
+  x_mask = (torch.rand(4, 8, 8) < 0.3).to(device)
+  y_embed = torch.rand(64, 32).to(device)
 
-from model.transformer import TransformerEncoder
-from tests.transformer_old import TransformerEncoder as TransformerEncoder_old
+  transformer_old = Transformer_old(32, 8, 6, 6, 64, dropout=0.0).to(device)
+  transformer_old_output = transformer_old(x, x_mask, y_embed, x_embed)[0]
 
-encoder_old = TransformerEncoder_old(encoder_layer_old, 6)
-encoder_old_output = encoder_old(x.transpose(0,1), src_key_padding_mask=x_mask, pos=x_embed.transpose(0,1))
+  transformer = DETRTransformer(32, 8, 6, 6, 64, dropout=0.0).to(device)
+  transformer.load_state_dict(transformer_old.state_dict(), strict=False)
+  for i in range(6):
+    copy_attn_weight(transformer.encoder.layers[i].self_attn, transformer_old.encoder.layers[i].self_attn, 32)
+    copy_attn_weight(transformer.decoder.layers[i].self_attn, transformer_old.decoder.layers[i].self_attn, 32)
+    copy_attn_weight(transformer.decoder.layers[i].cross_attn, transformer_old.decoder.layers[i].multihead_attn, 32)
+  transformer_output = transformer(x.flatten(2).transpose(1,2), ~x_mask.flatten(1), x_embed.flatten(2).transpose(1,2), y_embed.unsqueeze(0).repeat(4,1,1))
 
-encoder = TransformerEncoder(encoder_layer, 6)
-encoder_output = encoder(x, ~x_mask, x_embed)
-
-assert torch.allclose(encoder_output, encoder_old_output.transpose(0,1), rtol=1e-5, atol=1e-5), f"TransformerEncoder output miss match (with mask)!"
-
-print("TransformerDecoder...")
-
-x = torch.rand(4, 32, 64).to('cuda:0')
-x_mask = (torch.rand(4, 32) < 0.3).to('cuda:0')
-x_embed = torch.rand(4, 32, 64).to('cuda:0')
-y = torch.rand(4, 16, 64).to('cuda:0')
-y_embed = torch.rand(4, 16, 64).to('cuda:0')
-
-from model.transformer import TransformerDecoder
-from tests.transformer_old import TransformerDecoder as TransformerDecoder_old
-
-decoder_old = TransformerDecoder_old(decoder_layer_old, 6, nn.LayerNorm(64)).to('cuda:0')
-decoder_old_output = decoder_old(y.transpose(0,1), x.transpose(0,1), memory_key_padding_mask=x_mask, pos=x_embed.transpose(0,1), query_pos=y_embed.transpose(0,1)).squeeze(0)
-
-decoder = TransformerDecoder(decoder_layer, 6).to('cuda:0')
-decoder_output = decoder(x, ~x_mask, x_embed, y, y_embed)
-
-assert torch.allclose(decoder_output, decoder_old_output.transpose(0,1), rtol=1e-5, atol=1e-5), f"TransformerDecoder output miss match (with mask)!"
-
-print("Transformer...") 
-
-x = torch.rand(4, 32, 8, 8).to('cuda:0')
-x_embed = torch.rand(4, 32, 8, 8).to('cuda:0')
-x_mask = (torch.rand(4, 8, 8) < 0.3).to('cuda:0')
-y_embed = torch.rand(64, 32).to('cuda:0')
-
-from tests.transformer_old import Transformer as Transformer_old
-from model.transformer import DETRTransformer
-
-transformer_old = Transformer_old(32, 8, 6, 6, 64, dropout=0.0).to('cuda:0')
-transformer_old_output = transformer_old(x, x_mask, y_embed, x_embed)[0]
-
-transformer = DETRTransformer(32, 8, 6, 6, 64, dropout=0.0).to('cuda:0')
-transformer.load_state_dict(transformer_old.state_dict(), strict=False)
-for i in range(6):
-  copy_attn_weight(transformer.encoder.layers[i].self_attn, transformer_old.encoder.layers[i].self_attn, 32)
-  copy_attn_weight(transformer.decoder.layers[i].self_attn, transformer_old.decoder.layers[i].self_attn, 32)
-  copy_attn_weight(transformer.decoder.layers[i].cross_attn, transformer_old.decoder.layers[i].multihead_attn, 32)
-transformer_output = transformer(x.flatten(2).transpose(1,2), ~x_mask.flatten(1), x_embed.flatten(2).transpose(1,2), y_embed.unsqueeze(0).repeat(4,1,1))
-
-assert torch.allclose(transformer_output, transformer_old_output.squeeze(0), rtol=1e-5, atol=1e-5), f"Transformer output miss match (with mask)!"
-
-print("All tests passed!")
+  assert torch.allclose(transformer_output, transformer_old_output.squeeze(0), rtol=1e-5, atol=1e-5), f"Transformer output miss match (with mask)!"
