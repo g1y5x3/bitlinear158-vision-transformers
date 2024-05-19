@@ -95,6 +95,35 @@ class DETREncoderLayer(nn.Module):
     src = self.norm2(src)
 
     return src
+  
+class ViTEncoderLayer(nn.Module):
+  def __init__(self, d_model: int, nhead: int, dim_feedforward: int=2048, dropout: float=0.1, linear_layer: nn.Module=nn.Linear):
+    super().__init__()
+    self.self_attn = MultiheadAttention(d_model, nhead, dropout=dropout, linear_layer=linear_layer)
+
+    self.linear1 = linear_layer(d_model, dim_feedforward)
+    self.dropout = nn.Dropout(dropout) 
+    self.linear2 = linear_layer(dim_feedforward, d_model)
+
+    self.norm1 = nn.LayerNorm(d_model)
+    self.norm2 = nn.LayerNorm(d_model)
+    self.dropout1 = nn.Dropout(dropout)
+    self.dropout2 = nn.Dropout(dropout)
+
+    self.activation = nn.GELU()
+
+  def forward(self, src: Tensor, src_key_padding_mask: Tensor = None):
+    # self-attention
+    src = self.norm1(src)
+    self_attn = self.self_attn(src, src, src, key_padding_mask=src_key_padding_mask)
+    src = src + self.dropout1(self_attn)
+
+    # feedforward
+    src = self.norm2(src)
+    ff = self.linear2(self.dropout(self.activation(self.linear1(src))))
+    src = src + self.dropout2(ff)
+
+    return src
 
 class DETRDecoderLayer(nn.Module):
   def __init__(self, d_model: int, nhead: int, dim_feedforward: int=2048, dropout: float=0.1, linear_layer: nn.Module=nn.Linear):

@@ -5,7 +5,12 @@ sys.path.append('.')
 import pytest
 import torch
 import torch.nn as nn
-from model.transformer import MultiheadAttention, DETREncoderLayer, DETRDecoderLayer, TransformerEncoder, TransformerDecoder, DETRTransformer
+from transformers import ViTConfig
+from transformers.models.vit.modeling_vit import ViTLayer
+from model.transformer import (MultiheadAttention, TransformerEncoder, TransformerDecoder,
+                               DETREncoderLayer, DETRDecoderLayer, DETRTransformer,
+                               ViTEncoderLayer)
+# TODO: Use huggingface implement for test to make things simplier
 from tests.transformer_detr import TransformerEncoderLayer as TransformerEncoderLayer_old
 from tests.transformer_detr import TransformerDecoderLayer as TransformerDecoderLayer_old
 from tests.transformer_detr import TransformerEncoder as TransformerEncoder_old
@@ -46,7 +51,7 @@ def test_multihead_attention(device):
 
   assert torch.allclose(output, torch_output, rtol=1e-5, atol=1e-5), f"MultiheadAttention output miss match (with mask)!"
 
-def test_transformer_encoder(device):
+def test_detr_transformer_encoder(device):
   x = torch.rand(4, 32, 64).to(device)
   x_mask = (torch.rand(4, 32) < 0.3).to(device)
   x_embed = torch.rand(4, 32, 64).to(device)
@@ -69,7 +74,7 @@ def test_transformer_encoder(device):
 
   assert torch.allclose(encoder_output, encoder_old_output.transpose(0,1), rtol=1e-5, atol=1e-5), f"TransformerEncoder output miss match (with mask)!"
 
-def test_transformer_decoder(device):
+def test_detr_transformer_decoder(device):
   x = torch.rand(4, 32, 64).to(device)
   x_mask = (torch.rand(4, 32) < 0.3).to(device)
   x_embed = torch.rand(4, 32, 64).to(device)
@@ -77,7 +82,7 @@ def test_transformer_decoder(device):
   y_embed = torch.rand(4, 16, 64).to(device)
 
   decoder_layer_old = TransformerDecoderLayer_old(64, 8, 128, dropout=0.0).to(device)
-  layer_old_output = decoder_layer_old(tgt=y.transpose(0,1), memory=x.transpose(0,1), memory_key_padding_mask=x_mask, 
+  layer_old_output = decoder_layer_old(tgt=y.transpose(0,1), memory=x.transpose(0,1), memory_key_padding_mask=x_mask,
                                        pos=x_embed.transpose(0,1), query_pos=y_embed.transpose(0,1))
 
   decoder_layer = DETRDecoderLayer(64, 8, 128, dropout=0.0).to(device)
@@ -89,7 +94,7 @@ def test_transformer_decoder(device):
   assert torch.allclose(layer_output, layer_old_output.transpose(0,1), rtol=1e-5, atol=1e-5), f"TransformerDecoderLayer output miss match (with mask)!"
 
   decoder_old = TransformerDecoder_old(decoder_layer_old, 6, nn.LayerNorm(64)).to(device)
-  decoder_old_output = decoder_old(y.transpose(0,1), x.transpose(0,1), memory_key_padding_mask=x_mask, pos=x_embed.transpose(0,1), 
+  decoder_old_output = decoder_old(y.transpose(0,1), x.transpose(0,1), memory_key_padding_mask=x_mask, pos=x_embed.transpose(0,1),
                                    query_pos=y_embed.transpose(0,1)).squeeze(0)
 
   decoder = TransformerDecoder(decoder_layer, 6).to(device)
@@ -97,7 +102,13 @@ def test_transformer_decoder(device):
 
   assert torch.allclose(decoder_output, decoder_old_output.transpose(0,1), rtol=1e-5, atol=1e-5), f"TransformerDecoder output miss match (with mask)!"
 
-def test_transformer(device):
+def test_vit_encoder(device):
+  configuration = ViTConfig()
+  encoder_hf = ViTLayer(configuration).to(device)
+  encoder = ViT
+  print(model)
+
+def test_detr_transformer(device):
   x = torch.rand(4, 32, 8, 8).to(device)
   x_embed = torch.rand(4, 32, 8, 8).to(device)
   x_mask = (torch.rand(4, 8, 8) < 0.3).to(device)
