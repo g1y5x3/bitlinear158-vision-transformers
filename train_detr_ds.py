@@ -3,7 +3,7 @@ import numpy as np
 
 import dataset.transforms as T
 from model.backbone import ResNetBackbone
-from model.transformer import Transformer, TransformerBitLinear
+from model.transformer import TransformerBitLinear
 from model.detr import DETR, SetCriterion
 from model.matcher import HungarianMatcher
 from dataset.coco import CocoDetection, collate_fn
@@ -116,7 +116,7 @@ def main(args):
 	np.random.seed(seed)
 	random.seed(seed)
  
-	# create dataset
+	# TODO: replace with Albumentation
 	scales = [480, 512, 544, 576, 608, 640, 672, 704, 736, 768, 800]
 	transform_train = T.Compose([
 	  # augumentation
@@ -136,16 +136,14 @@ def main(args):
 	  ])
 	])  
 
-	# to avoid downloading the same file at the same time during model initialization
+	# avoid downloading the same file at the same time during model initialization
 	if rank != 0: torch.distributed.barrier()
 
 	dataset_train = CocoDetection(args.coco_path + "/train2017", args.coco_path + "/annotations/instances_train2017.json", transform_train)
-	# TODO: add transform_test as well as dataset_eval
-	# model
+
 	# TODO: use a ViT based backbone
 	backbone = ResNetBackbone()
 	transformer = TransformerBitLinear(args.hidden_dim, args.nheads, args.enc_layers, args.dec_layers, args.dim_feedforward, args.dropout)
-	# transformer = Transformer(args.hidden_dim, args.nheads, args.enc_layers, args.dec_layers, args.dim_feedforward, args.dropout)
 	
 	model = DETR(backbone=backbone, transformer=transformer, num_classes=args.num_classes, num_queries=args.num_queries)
 
@@ -154,7 +152,6 @@ def main(args):
 	# TODO: let criterion return all 3 losses and apply the weight at the end before backprop
 	criterion = SetCriterion(args.num_classes, matcher, args.eos_coef, weight=(args.dice_loss_coef, args.bbox_loss_coef, args.giou_loss_coef))
 
-	# downloaded is finished so other rank can continue
 	if rank == 0: torch.distributed.barrier()
 
 	# TODO: calculate the number of tenary parameters for transformers

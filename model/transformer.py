@@ -2,21 +2,8 @@ import copy
 import torch
 import torch.nn.functional as F
 from torch import nn, Tensor
-
 from bitlinear import BitLinear
 
-
-"""https://arxiv.org/abs/1910.07467"""
-class RMSNorm(nn.Module):
-  def __init__(self, dim: int, eps: float = 1e-6):
-    super().__init__()
-    self.eps = eps
-    self.scale = nn.Parameter(torch.ones(dim))
-
-  def forward(self, x: Tensor) -> Tensor:
-    x_fp32 = x.float()
-    x_normed = x_fp32 * torch.rsqrt(x_fp32.pow(2).mean(-1, keepdim=True) + self.eps).type_as(x)
-    return x_normed * self.scale
 
 class MultiheadAttention(nn.Module):
   def __init__(self, embed_dim: int, num_heads: int, linear_layer: nn.Module=nn.Linear, dropout: float=0.0, bias: bool=True):
@@ -54,7 +41,7 @@ class MultiheadAttention(nn.Module):
 
     return attn_output
 
-# postional embedding was added to each layer of the transformer encoder for DETR
+# postional embedding was added to each layer of the transformer encoder and decoder in DETR
 class DETRTransformerEncoderLayer(nn.Module):
   def __init__(self, d_model: int, nhead: int, dim_feedforward: int=2048, dropout: float=0.1):
     super().__init__()
@@ -86,7 +73,7 @@ class DETRTransformerEncoderLayer(nn.Module):
 
     return src
 
-class TransformerDecoderLayer(nn.Module):
+class DETRTransformerDecoderLayer(nn.Module):
   def __init__(self, d_model: int, nhead: int, dim_feedforward: int=2048, dropout: float=0.1):
     super().__init__()
     self.self_attn  = MultiheadAttention(d_model, nhead, dropout=dropout)
@@ -163,7 +150,7 @@ class DETRTransformer(nn.Module):
     encoder_layer = DETRTransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout)
     self.encoder  = TransformerEncoder(encoder_layer, num_encoder_layers)
 
-    decoder_layer = TransformerDecoderLayer(d_model, nhead, dim_feedforward, dropout)
+    decoder_layer = DETRTransformerDecoderLayer(d_model, nhead, dim_feedforward, dropout)
     self.decoder  = TransformerDecoder(decoder_layer, num_decoder_layers)
 
   # assume that the input is already flattened

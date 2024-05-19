@@ -64,7 +64,8 @@ class SetCriterion(nn.Module):
 
   def forward(self, outputs_logits: Tensor, outputs_boxes: Tensor, targets: Dict[str, Tensor]):
     # match predictions with ground truth and produce src and target tensors for computing losses
-    # slowest part of the entire algorithm due to extra trips to the cpu inside matcher and targets having dynamic length
+    # note 1: this is the slowest part of the entire algorithm due to extra trips to the cpu inside matcher and targets having dynamic length
+    # note 2: many of the following works were changing the matching criteria to enable better gradients for the feature extraction layer
     indices = self.matcher(outputs_logits, outputs_boxes, targets)
     batch_idx, query_idx, labels, target_boxes = [], [], [], []
     for i, ((src_idx, tgt_idx), target) in enumerate(zip(indices, targets)):
