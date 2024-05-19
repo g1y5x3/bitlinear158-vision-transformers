@@ -103,10 +103,30 @@ def test_detr_transformer_decoder(device):
   assert torch.allclose(decoder_output, decoder_old_output.transpose(0,1), rtol=1e-5, atol=1e-5), f"TransformerDecoder output miss match (with mask)!"
 
 def test_vit_encoder(device):
-  configuration = ViTConfig()
+  x = torch.rand(4, 32, 64).to(device)
+
+  configuration = ViTConfig(hidden_size=64, num_attention_heads=8, intermediate_size=128, layer_norm_eps=1e-05, 
+                            hidden_act="gelu", hidden_dropout_prob=0.0, attention_probs_dropout_prob=0.0)
   encoder_hf = ViTLayer(configuration).to(device)
-  encoder = ViT
-  print(model)
+  encoder = ViTEncoderLayer(d_model=64, nhead=8, dim_feedforward=128, dropout=0.0).to(device)
+  with torch.no_grad():
+    encoder_hf.attention.attention.query.weight.copy_(encoder.self_attn.q_proj.weight)
+    encoder_hf.attention.attention.query.bias.copy_(encoder.self_attn.q_proj.bias)
+    encoder_hf.attention.attention.key.weight.copy_(encoder.self_attn.k_proj.weight)
+    encoder_hf.attention.attention.key.bias.copy_(encoder.self_attn.k_proj.bias)
+    encoder_hf.attention.attention.value.weight.copy_(encoder.self_attn.v_proj.weight)
+    encoder_hf.attention.attention.value.bias.copy_(encoder.self_attn.v_proj.bias)
+    encoder_hf.attention.output.dense.weight.copy_(encoder.self_attn.out_proj.weight)
+    encoder_hf.attention.output.dense.bias.copy_(encoder.self_attn.out_proj.bias)
+    encoder_hf.intermediate.dense.weight.copy_(encoder.linear1.weight)
+    encoder_hf.intermediate.dense.bias.copy_(encoder.linear1.bias)
+    encoder_hf.output.dense.weight.copy_(encoder.linear2.weight)
+    encoder_hf.output.dense.bias.copy_(encoder.linear2.bias)
+  
+  output_hf = encoder_hf(x)
+  output = encoder(x)
+  
+  assert torch.allclose(output, output_hf[0], rtol=1e-5, atol=1e-5), f"ViTEncoder output miss match!"
 
 def test_detr_transformer(device):
   x = torch.rand(4, 32, 8, 8).to(device)

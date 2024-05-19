@@ -114,13 +114,13 @@ class ViTEncoderLayer(nn.Module):
 
   def forward(self, src: Tensor, src_key_padding_mask: Tensor = None):
     # self-attention
-    src = self.norm1(src)
-    self_attn = self.self_attn(src, src, src, key_padding_mask=src_key_padding_mask)
+    src_norm = self.norm1(src)
+    self_attn = self.self_attn(src_norm, src_norm, src_norm, key_padding_mask=src_key_padding_mask)
     src = src + self.dropout1(self_attn)
 
     # feedforward
-    src = self.norm2(src)
-    ff = self.linear2(self.dropout(self.activation(self.linear1(src))))
+    src_norm = self.norm2(src)
+    ff = self.linear2(self.dropout(self.activation(self.linear1(src_norm))))
     src = src + self.dropout2(ff)
 
     return src
