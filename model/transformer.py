@@ -2,7 +2,7 @@ import copy
 import torch
 import torch.nn.functional as F
 from torch import nn, Tensor
-from bitlinear import BitLinear
+from model.bitlinear import BitLinear
 
 
 class MultiheadAttention(nn.Module):
@@ -67,40 +67,21 @@ class TransformerDecoder(nn.Module):
     
     return output
 
-class DETRTransformer(nn.Module):
-  def __init__(self, d_model=512, nhead=8, num_encoder_layers=6, num_decoder_layers=6, dim_feedforward=2048, dropout=0.1):
-    super().__init__()
-    self.d_model = d_model
-    self.nhead   = nhead
-
-    encoder_layer = DETREncoderLayer(d_model, nhead, dim_feedforward, dropout)
-    self.encoder  = TransformerEncoder(encoder_layer, num_encoder_layers)
-
-    decoder_layer = DETRDecoderLayer(d_model, nhead, dim_feedforward, dropout)
-    self.decoder  = TransformerDecoder(decoder_layer, num_decoder_layers)
-
-  # assume that the input is already flattened
-  def forward(self, src: Tensor, src_padding_mask: Tensor, src_pos: Tensor, query_pos: Tensor):
-    memory = self.encoder(src=src, src_key_padding_mask=src_padding_mask, src_pos=src_pos)
-  
-    tgt = torch.zeros_like(query_pos)
-    output = self.decoder(memory=memory, memory_key_padding_mask=src_padding_mask, memory_pos=src_pos, tgt=tgt, query_pos=query_pos)
-  
-    return output
-  
 class DETREncoderLayer(nn.Module):
   def __init__(self, d_model: int, nhead: int, dim_feedforward: int=2048, dropout: float=0.1, linear_layer: nn.Module=nn.Linear):
     super().__init__()
     self.self_attn = MultiheadAttention(d_model, nhead, dropout=dropout, linear_layer=BitLinear)
-    self.dropout1 = nn.Dropout(dropout)
-    self.norm1 = nn.LayerNorm(d_model)
 
-    self.linear1 = BitLinear(d_model, dim_feedforward)
-    self.activation = nn.ReLU()
+    self.linear1 = linear_layer(d_model, dim_feedforward)
     self.dropout = nn.Dropout(dropout) 
-    self.linear2 = BitLinear(dim_feedforward, d_model)
-    self.dropout2 = nn.Dropout(dropout)
+    self.linear2 = linear_layer(dim_feedforward, d_model)
+
+    self.norm1 = nn.LayerNorm(d_model)
     self.norm2 = nn.LayerNorm(d_model)
+    self.dropout1 = nn.Dropout(dropout)
+    self.dropout2 = nn.Dropout(dropout)
+
+    self.activation = nn.ReLU()
 
   def forward(self, src: Tensor, src_key_padding_mask: Tensor, src_pos: Tensor):
     # self-attention
@@ -116,15 +97,15 @@ class DETREncoderLayer(nn.Module):
 
     return src
 
-class TransformerDecoderLayerBitLinear(nn.Module):
-  def __init__(self, d_model: int, nhead: int, dim_feedforward: int=2048, dropout: float=0.1):
+class DETRDecoderLayer(nn.Module):
+  def __init__(self, d_model: int, nhead: int, dim_feedforward: int=2048, dropout: float=0.1, linear_layer: nn.Module=nn.Linear):
     super().__init__()
     self.self_attn  = MultiheadAttention(d_model, nhead, dropout=dropout, linear_layer=BitLinear)
     self.cross_attn = MultiheadAttention(d_model, nhead, dropout=dropout, linear_layer=BitLinear)
 
-    self.linear1 = BitLinear(d_model, dim_feedforward)
+    self.linear1 = linear_layer(d_model, dim_feedforward)
     self.dropout = nn.Dropout(dropout) 
-    self.linear2 = BitLinear(dim_feedforward, d_model)
+    self.linear2 = linear_layer(dim_feedforward, d_model)
 
     self.norm1 = nn.LayerNorm(d_model)
     self.norm2 = nn.LayerNorm(d_model)
@@ -157,16 +138,17 @@ class TransformerDecoderLayerBitLinear(nn.Module):
 
     return tgt
 
-class TransformerBitLinear(nn.Module):
-  def __init__(self, d_model=512, nhead=8, num_encoder_layers=6, num_decoder_layers=6, dim_feedforward=2048, dropout=0.1):
+class DETRTransformer(nn.Module):
+  def __init__(self, d_model=512, nhead=8, num_encoder_layers=6, num_decoder_layers=6, dim_feedforward=2048, dropout=0.1,
+               linear_layer: nn.Module=nn.Linear):
     super().__init__()
     self.d_model = d_model
     self.nhead   = nhead
 
-    encoder_layer = TransformerEncoderLayerBitLinear(d_model, nhead, dim_feedforward, dropout)
+    encoder_layer = DETREncoderLayer(d_model, nhead, dim_feedforward, dropout, linear_layer)
     self.encoder  = TransformerEncoder(encoder_layer, num_encoder_layers)
 
-    decoder_layer = TransformerDecoderLayerBitLinear(d_model, nhead, dim_feedforward, dropout)
+    decoder_layer = DETRDecoderLayer(d_model, nhead, dim_feedforward, dropout, linear_layer)
     self.decoder  = TransformerDecoder(decoder_layer, num_decoder_layers)
 
   # assume that the input is already flattened

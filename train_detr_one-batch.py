@@ -6,7 +6,7 @@ from torch.utils.data import SequentialSampler, BatchSampler, DataLoader
 
 from datasets import build_dataset
 from model.backbone import ResNetBackbone
-from model.transformer import TransformerBitLinear, DETRTransformer
+from model.transformer import DETRTransformer
 from model.detr import DETR, SetCriterion
 from model.matcher import HungarianMatcher
 from util.misc import collate_fn

@@ -43,13 +43,13 @@ x = torch.rand(4, 32, 64).to('cuda:0')
 x_mask = (torch.rand(4, 32) < 0.3).to('cuda:0')
 x_embed = torch.rand(4, 32, 64).to('cuda:0')
 
-from model.transformer import DETRTransformerEncoderLayer
+from model.transformer import DETREncoderLayer
 from tests.transformer_old import TransformerEncoderLayer as TransformerEncoderLayer_old
 
 encoder_layer_old = TransformerEncoderLayer_old(64, 8, 128, dropout=0.0).to('cuda:0')
 layer_old_output = encoder_layer_old(x.transpose(0,1), src_key_padding_mask=x_mask, pos=x_embed.transpose(0,1))
 
-encoder_layer = DETRTransformerEncoderLayer(64, 8, 128, dropout=0.0).to('cuda:0')
+encoder_layer = DETREncoderLayer(64, 8, 128, dropout=0.0).to('cuda:0')
 encoder_layer.load_state_dict(encoder_layer_old.state_dict(), strict=False)
 copy_attn_weight(encoder_layer.self_attn, encoder_layer_old.self_attn, 64)
 layer_output = encoder_layer(x, src_key_padding_mask=~x_mask, src_pos=x_embed)
@@ -64,14 +64,14 @@ x_embed = torch.rand(4, 32, 64).to('cuda:0')
 y = torch.rand(4, 16, 64).to('cuda:0')
 y_embed = torch.rand(4, 16, 64).to('cuda:0')
 
-from model.transformer import TransformerDecoderLayer
+from model.transformer import DETRDecoderLayer
 from tests.transformer_old import TransformerDecoderLayer as TransformerDecoderLayer_old
 
 decoder_layer_old = TransformerDecoderLayer_old(64, 8, 128, dropout=0.0).to('cuda:0')
 layer_old_output = decoder_layer_old(tgt=y.transpose(0,1), memory=x.transpose(0,1), memory_key_padding_mask=x_mask, 
                                      pos=x_embed.transpose(0,1), query_pos=y_embed.transpose(0,1))
 
-decoder_layer = TransformerDecoderLayer(64, 8, 128, dropout=0.0).to('cuda:0')
+decoder_layer = DETRDecoderLayer(64, 8, 128, dropout=0.0).to('cuda:0')
 decoder_layer.load_state_dict(decoder_layer_old.state_dict(), strict=False)
 copy_attn_weight(decoder_layer.self_attn, decoder_layer_old.self_attn, 64)
 copy_attn_weight(decoder_layer.cross_attn, decoder_layer_old.multihead_attn, 64)
