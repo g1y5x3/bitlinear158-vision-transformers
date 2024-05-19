@@ -6,7 +6,7 @@ from bitlinear import BitLinear
 
 
 class MultiheadAttention(nn.Module):
-  def __init__(self, embed_dim: int, num_heads: int, linear_layer: nn.Module=nn.Linear, dropout: float=0.0, bias: bool=True):
+  def __init__(self, embed_dim: int, num_heads: int, dropout: float=0.0, bias: bool=True, linear_layer: nn.Module=nn.Linear):
     super().__init__()
     self.embed_dim = embed_dim
     self.num_heads = num_heads
@@ -41,79 +41,6 @@ class MultiheadAttention(nn.Module):
 
     return attn_output
 
-# postional embedding was added to each layer of the transformer encoder and decoder in DETR
-class DETRTransformerEncoderLayer(nn.Module):
-  def __init__(self, d_model: int, nhead: int, dim_feedforward: int=2048, dropout: float=0.1):
-    super().__init__()
-    self.self_attn = MultiheadAttention(d_model, nhead, dropout=dropout)
-
-    self.linear1 = nn.Linear(d_model, dim_feedforward)
-    self.dropout = nn.Dropout(dropout) 
-    self.linear2 = nn.Linear(dim_feedforward, d_model)
-
-    self.norm1 = nn.LayerNorm(d_model)
-    self.norm2 = nn.LayerNorm(d_model)
-    self.dropout1 = nn.Dropout(dropout)
-    self.dropout2 = nn.Dropout(dropout)
-
-    self.activation = nn.ReLU()
-
-  def forward(self, src: Tensor, src_key_padding_mask: Tensor, src_pos: Tensor):
-    # self-attention
-    q = k = src + src_pos # positional embedding is added to each layer of the encoder
-    self_attn = self.self_attn(q, k, src, key_padding_mask=src_key_padding_mask)
-    src = src + self.dropout1(self_attn)
-    src = self.norm1(src)
-
-    # feedforward
-    src = self.norm2(src)
-    ff = self.linear2(self.dropout(self.activation(self.linear1(src))))
-    src = src + self.dropout2(ff)
-    src = self.norm2(src)
-
-    return src
-
-class DETRTransformerDecoderLayer(nn.Module):
-  def __init__(self, d_model: int, nhead: int, dim_feedforward: int=2048, dropout: float=0.1):
-    super().__init__()
-    self.self_attn  = MultiheadAttention(d_model, nhead, dropout=dropout)
-    self.cross_attn = MultiheadAttention(d_model, nhead, dropout=dropout)
-
-    self.linear1 = nn.Linear(d_model, dim_feedforward)
-    self.dropout = nn.Dropout(dropout) 
-    self.linear2 = nn.Linear(dim_feedforward, d_model)
-
-    self.norm1 = nn.LayerNorm(d_model)
-    self.norm2 = nn.LayerNorm(d_model)
-    self.norm3 = nn.LayerNorm(d_model)
-    self.dropout1 = nn.Dropout(dropout)
-    self.dropout2 = nn.Dropout(dropout)
-    self.dropout3 = nn.Dropout(dropout)
-
-    self.activation = nn.ReLU()
-
-  def forward(self, memory: Tensor, memory_key_padding_mask: Tensor, memory_pos: Tensor,
-                    tgt: Tensor, query_pos: Tensor):
-    # self-attention
-    q = k = tgt + query_pos # positional embedding is also added to each layer of the decoder
-    self_attn = self.self_attn(q, k, tgt)
-    tgt = tgt + self.dropout1(self_attn)
-    tgt = self.norm1(tgt)
-
-    # cross-attention
-    q = tgt + query_pos
-    k = memory + memory_pos
-    cross_attn = self.cross_attn(q, k, memory, key_padding_mask=memory_key_padding_mask)
-    tgt = tgt + self.dropout2(cross_attn)
-    tgt = self.norm2(tgt)
-
-    # feedforward
-    ff = self.linear2(self.dropout(self.activation(self.linear1(tgt))))
-    tgt = tgt + self.dropout3(ff)
-    tgt = self.norm3(tgt)
-
-    return tgt
-
 class TransformerEncoder(nn.Module):
   def __init__(self, encoder_layer: nn.Module, num_layers: int):
     super().__init__()
@@ -127,7 +54,6 @@ class TransformerEncoder(nn.Module):
 
     return output
 
-# TODO: add return_intermediate
 class TransformerDecoder(nn.Module):
   def __init__(self, decoder_layer: nn.Module, num_layers: int):
     super().__init__()
@@ -147,10 +73,10 @@ class DETRTransformer(nn.Module):
     self.d_model = d_model
     self.nhead   = nhead
 
-    encoder_layer = DETRTransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout)
+    encoder_layer = DETREncoderLayer(d_model, nhead, dim_feedforward, dropout)
     self.encoder  = TransformerEncoder(encoder_layer, num_encoder_layers)
 
-    decoder_layer = DETRTransformerDecoderLayer(d_model, nhead, dim_feedforward, dropout)
+    decoder_layer = DETRDecoderLayer(d_model, nhead, dim_feedforward, dropout)
     self.decoder  = TransformerDecoder(decoder_layer, num_decoder_layers)
 
   # assume that the input is already flattened
@@ -162,21 +88,19 @@ class DETRTransformer(nn.Module):
   
     return output
   
-class TransformerEncoderLayerBitLinear(nn.Module):
-  def __init__(self, d_model: int, nhead: int, dim_feedforward: int=2048, dropout: float=0.1):
+class DETREncoderLayer(nn.Module):
+  def __init__(self, d_model: int, nhead: int, dim_feedforward: int=2048, dropout: float=0.1, linear_layer: nn.Module=nn.Linear):
     super().__init__()
     self.self_attn = MultiheadAttention(d_model, nhead, dropout=dropout, linear_layer=BitLinear)
+    self.dropout1 = nn.Dropout(dropout)
+    self.norm1 = nn.LayerNorm(d_model)
 
     self.linear1 = BitLinear(d_model, dim_feedforward)
+    self.activation = nn.ReLU()
     self.dropout = nn.Dropout(dropout) 
     self.linear2 = BitLinear(dim_feedforward, d_model)
-
-    self.norm1 = nn.LayerNorm(d_model)
-    self.norm2 = nn.LayerNorm(d_model)
-    self.dropout1 = nn.Dropout(dropout)
     self.dropout2 = nn.Dropout(dropout)
-
-    self.activation = nn.ReLU()
+    self.norm2 = nn.LayerNorm(d_model)
 
   def forward(self, src: Tensor, src_key_padding_mask: Tensor, src_pos: Tensor):
     # self-attention

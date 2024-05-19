@@ -3,7 +3,6 @@ import torchvision
 import torch.nn.functional as F
 
 from torch import nn, Tensor
-from torchvision.ops import FrozenBatchNorm2d
 from torchvision.models import ResNet50_Weights
 from torchvision.models._utils import IntermediateLayerGetter
 
