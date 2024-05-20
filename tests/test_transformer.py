@@ -10,7 +10,7 @@ from transformers.models.vit.modeling_vit import ViTLayer
 from model.transformer import (MultiheadAttention, TransformerEncoder, TransformerDecoder,
                                DETREncoderLayer, DETRDecoderLayer, DETRTransformer,
                                ViTEncoderLayer)
-# TODO: Use huggingface implement for test to make things simplier
+# TODO: Maybe just to test against huggingface implementation to make things simplier
 from tests.transformer_detr import TransformerEncoderLayer as TransformerEncoderLayer_old
 from tests.transformer_detr import TransformerDecoderLayer as TransformerDecoderLayer_old
 from tests.transformer_detr import TransformerEncoder as TransformerEncoder_old

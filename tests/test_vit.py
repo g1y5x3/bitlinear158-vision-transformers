@@ -1,7 +1,6 @@
 import torch
 from datasets import load_dataset
 from transformers import AutoImageProcessor, ViTForImageClassification
-from transformers import ViTModel
 
 dataset = load_dataset("huggingface/cats-image")
 image = dataset["test"]["image"][0]
@@ -9,7 +8,7 @@ image = dataset["test"]["image"][0]
 image_processor = AutoImageProcessor.from_pretrained("google/vit-base-patch16-224")
 model = ViTForImageClassification.from_pretrained("google/vit-base-patch16-224")
 model.to("cuda")
-print(model.vit.encoder.layer[0])
+print(model)
 
 inputs = image_processor(image, return_tensors="pt").to("cuda")
 
